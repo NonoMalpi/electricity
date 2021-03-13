@@ -1,4 +1,6 @@
+import datetime
 import logging
+import time
 
 from io import BytesIO
 from typing import AnyStr
@@ -8,8 +10,10 @@ import requests
 
 import pandas as pd
 
+from joblib import Parallel, delayed
+
 logger = logging.getLogger()
-logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s")
+logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s", level=logging.INFO)
 
 
 class Omie:
@@ -77,11 +81,11 @@ class Omie:
             logging.warning(msg=f"The {file_pattern} was not found in zip")
 
     @staticmethod
-    def _parse_unzip_file(unzip_file: ZipFile, filename: AnyStr, year: AnyStr) -> pd.DataFrame:
+    def _parse_unzip_file(unzip_file: ZipFile, filename: AnyStr, year: int) -> pd.DataFrame:
 
         dates = pd.date_range(start=f"{year}-01-01", end=f"{year}-12-31", freq="D")
 
-        assert len(dates) < len(unzip_file.namelist()), \
+        assert len(dates) <= len(unzip_file.namelist()), \
             f"Zip file for year {year} does not contain all dates. " \
             f"There are {len(unzip_file.namelist())} dates."
 
@@ -110,7 +114,7 @@ class Omie:
         return response.content
 
     @staticmethod
-    def download_year_file(filename: AnyStr, year: AnyStr) -> pd.DataFrame:
+    def download_year_file(filename: AnyStr, year: int) -> pd.DataFrame:
 
         filename_year_zip = f"{filename}_{year}.zip"
         zip_content = Omie._download_content(family_file=filename, filename=filename_year_zip)
@@ -127,3 +131,36 @@ class Omie:
         file_content = Omie._download_content(family_file=filename, filename=filename_date)
         date_df = Omie._create_df_from_bytes(filebytes=BytesIO(file_content))
         return date_df
+
+    @staticmethod
+    def download_period_file(filename: AnyStr, start_year: int, end_year: int):
+
+        current_year_download = False
+
+        if end_year < datetime.date.today().year:
+            end_year += 1
+        elif end_year >= datetime.date.today().year:
+            current_year_download = True
+            end_year = datetime.date.today().year
+
+        years = range(start_year, end_year)
+
+        start = time.time()
+
+        df_list = Parallel(n_jobs=-1)(
+            delayed(Omie.download_year_file)(filename=filename, year=year) for year in years
+        )
+
+        if current_year_download:
+            dates = pd.date_range(start=f"{end_year}-01-01", end=datetime.date.today(), freq="D")
+            df_list += Parallel(n_jobs=-1)(
+                delayed(Omie.download_date_file)(filename=filename, date=date) for date in dates
+            )
+
+        df = pd.concat(df_list)
+
+        end = time.time()
+        logging.info(f"Time processing: {end-start}")
+
+        return df
+
