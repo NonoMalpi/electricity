@@ -130,10 +130,11 @@ class Omie:
         filename_date = f"{filename}_{date}.1"
         file_content = Omie._download_content(family_file=filename, filename=filename_date)
         date_df = Omie._create_df_from_bytes(filebytes=BytesIO(file_content))
+
         return date_df
 
     @staticmethod
-    def download_period_file(filename: AnyStr, start_year: int, end_year: int):
+    def download_period_file(filename: AnyStr, start_year: int, end_year: int) -> pd.DataFrame:
 
         current_year_download = False
 
