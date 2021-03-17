@@ -3,6 +3,49 @@ import torch
 import torch.nn as nn
 
 
+class ODEfunc(nn.Module):
+    def __init__(self, obs_dim: int, hidden_layer_1: int, hidden_layer_2: int,
+                 hidden_layer_3: int, hidden_layer_4: int,
+                 hidden_layer_5: int):
+        """ Simple neural network for the ODE Solver.
+
+        It consists of two hidden layers with relu activation function
+
+        :param obs_dim: The observable dimension.
+        :param hidden_layer_1: Dimension of the first hidden layer
+        :param hidden_layer_2: Dimension of the second hidden layer
+        """
+        super(ODEfunc, self).__init__()
+
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_layer_1),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_1, hidden_layer_2),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_2, hidden_layer_3),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_3, hidden_layer_4),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_4, hidden_layer_5),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_5, obs_dim),
+        )
+
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, mean=0, std=0.1)
+                nn.init.constant_(m.bias, val=0)
+
+    def forward(self, t: torch.Tensor, y: torch.Tensor):
+        """ The initial value y is passed through a neural network.
+
+        :param t: Tensor with time to compute the trajectory
+        :param y: Tensor with the initial value, shape: (nbatch, obs_dim)
+        :return: Tensor with the output of the neural network, shape: (nbatch, obs_dim)
+        """
+        return self.net(y)
+
+
 class RecurrentNN(nn.Module):
     def __init__(self, obs_dim: int, latent_dim: int, nhidden: int, nbatch: int):
         """ Neural network used as encoder in the Variational AutoEncoder
@@ -50,7 +93,7 @@ class LatentODE(nn.Module):
         :param nhidden: Dimension of the hidden layer
         """
         super(LatentODE, self).__init__()
-        self.elu = nn.ELU()
+        self.tanh = nn.Tanh()
         self.layer_1 = nn.Linear(latent_dim, nhidden)
         self.layer_2 = nn.Linear(nhidden, nhidden)
         self.layer_3 = nn.Linear(nhidden, latent_dim)
@@ -64,9 +107,9 @@ class LatentODE(nn.Module):
         :return: Tensor with the output of the neural network, shape: (nbatch, latent_dim)
         """
         out = self.layer_1(x)
-        out = self.elu(out)
+        out = self.tanh(out)
         out = self.layer_2(out)
-        out = self.elu(out)
+        out = self.tanh(out)
         out = self.layer_3(out)
         return out
 
@@ -80,7 +123,7 @@ class Decoder(nn.Module):
         :param nhidden: Dimension of the hidden layer
         """
         super(Decoder, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
+        self.tanh = nn.Tanh()
         self.layer_1 = nn.Linear(latent_dim, nhidden)
         self.layer_2 = nn.Linear(nhidden, int(nhidden/2))
         self.layer_3 = nn.Linear(int(nhidden/2), obs_dim)
@@ -93,8 +136,9 @@ class Decoder(nn.Module):
         :return: Tensor containing trajectory in observable space, shape: (nbatch, nsamples, obs_dim)
         """
         out = self.layer_1(z)
-        out = self.relu(out)
+        out = self.tanh(out)
         out = self.layer_2(out)
-        out = self.relu(out)
+        out = self.tanh(out)
         out = self.layer_3(out)
         return out
+
