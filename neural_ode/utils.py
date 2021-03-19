@@ -22,7 +22,7 @@ class RunningAverageMeter:
         self.val = val
 
 
-def get_batch(y_true, t,  batch_size, trajectory_time):
+def get_random_batch(y_true, t,  batch_size, trajectory_time):
     s = torch.from_numpy(np.random.choice(
         np.arange(t.shape[0] - trajectory_time, dtype=np.int64), batch_size, replace=False
     ))
@@ -38,6 +38,20 @@ def get_batch(y_true, t,  batch_size, trajectory_time):
     samp_ts = t[:trajectory_time].float()
 
     return samp_trajs, samp_ts, s
+
+
+def get_norm_batch(y_true, start, end):
+
+    trajectory = y_true.iloc[start: end]
+    mean = trajectory.mean()
+    std = trajectory.std()
+
+    scaled_trajectory = np.array((trajectory - mean) / std).reshape(-1, 1)
+    samp_traj = torch.from_numpy(np.stack([scaled_trajectory], axis=0)).float()
+
+    samp_ts = torch.arange(start=start, end=end, step=1, dtype=torch.float)
+
+    return samp_traj, samp_ts, mean, std
 
 
 def log_normal_pdf(x, mean, logvar):
@@ -68,6 +82,17 @@ def normal_kl(mu1, logvar1, mu2, logvar2):
 def plot_y_y_pred(y_true, y_pred, t):
 
     fig, ax = plt.subplots()
-    ax.plot(t, y_true.reshape(-1), color="blue")
+    ax.scatter(t, y_true.reshape(-1), color="blue")
     ax.plot(t, y_pred.reshape(-1).detach().numpy(), color="orange")
+    plt.show()
+
+
+def plot_prediction_true_scale(y_true, y_pred, samp_ts, t_limit, mean, std):
+
+    y_pred_scale = y_pred * std + mean
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax.scatter(samp_ts, y_true.reshape(-1), color="blue")
+    ax.plot(samp_ts, y_pred_scale.reshape(-1), color="orange")
+    ax.axvline(x=t_limit)
     plt.show()
