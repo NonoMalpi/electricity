@@ -54,6 +54,17 @@ def get_norm_batch(y_true, start, end):
     return samp_traj, samp_ts, mean, std
 
 
+def get_norm_batch_with_noise(y_true, start, end, noise_std):
+
+    samp_traj, samp_ts, mean, std = get_norm_batch(y_true=y_true, start=start, end=end)
+
+    noise = torch.from_numpy(np.random.randn(*samp_traj.shape) * noise_std)
+
+    samp_traj += noise
+
+    return samp_traj, samp_ts, mean, std
+
+
 def log_normal_pdf(x, mean, logvar):
     """ Return log (PDF_normal)
     log ((1/(sigma*sqrt(2*pi))*exp(-1/2*(x-mean)**2/sigma**2)) =
