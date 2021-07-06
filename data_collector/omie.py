@@ -136,6 +136,8 @@ class Omie:
     @staticmethod
     def download_period_file(filename: AnyStr, start_year: int, end_year: int) -> pd.DataFrame:
 
+        assert start_year >= 2016, "Minimum year stored in Omie is 2016."
+
         current_year_download = False
 
         if end_year < datetime.date.today().year:
@@ -164,4 +166,12 @@ class Omie:
         logging.info(f"Time processing: {end-start}")
 
         return df
+
+    @staticmethod
+    def include_old_file(df: pd.DataFrame, filename: str) -> pd.DataFrame:
+
+        old_df = pd.read_csv(filename)
+        old_df = Omie._clean_df(old_df)
+
+        return pd.concat([old_df, df], ignore_index=True)
 

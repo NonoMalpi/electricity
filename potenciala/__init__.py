@@ -1,0 +1,1 @@
+from .potenciala import BucketMethod, Potenciala
