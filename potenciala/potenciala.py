@@ -1,4 +1,4 @@
-from typing import List, NoReturn
+from typing import Dict, List, NoReturn
 
 import numpy as np
 import pandas as pd
@@ -19,9 +19,10 @@ class Potenciala:
                  signal_name: str,
                  metric_lag_time: List[int],
                  bucket_method=BucketMethod.Cut,
-                 bin_size=2):
+                 bin_size=2,
+                 no_time_change: bool = True):
 
-        self.df = df
+        self.df = self._preprocess_input_df(df=df, no_time_change=no_time_change)
         self.signal_name = signal_name
         self.metric_lag_time = metric_lag_time
         self.bin_size = bin_size
@@ -43,6 +44,27 @@ class Potenciala:
         )
 
         self.potential = self._compute_potential()
+        self.volatility = self._compute_volatility()
+
+    def _preprocess_input_df(self, df: pd.DataFrame, no_time_change: bool) -> pd.DataFrame:
+
+        if not no_time_change:
+            return df.copy(deep=True)
+        else:
+            min_date, max_date = df["date"].min(), df["date"].max()
+            max_date = (pd.to_datetime(max_date) + pd.Timedelta("1 day")).strftime(format="%Y-%m-%d")
+            date_index = pd.date_range(start=min_date, end=max_date, freq="H")
+
+            aux_df = pd.DataFrame()
+            aux_df["date_hour"] = date_index
+            aux_df = aux_df[aux_df["date_hour"] < max_date]
+            aux_df["date"] = aux_df["date_hour"].dt.date.astype(str)
+            aux_df["hour"] = (aux_df["date_hour"].dt.hour + 1).astype(int)
+
+            result_df = aux_df.merge(df, how="left", on=["date", "hour"])
+            result_df.drop("date_hour", axis=1, inplace=True)
+
+            return result_df
 
     def _compute_drift(self) -> NoReturn:
         self.drift_cols = []
@@ -70,7 +92,7 @@ class Potenciala:
 
             self.df[x_col_name] = pd.cut(
                 x=self.df[self.signal_name], bins=x_axis, labels=x_axis[:-1], right=False
-            ).astype(int)
+            ).astype(float)
 
         elif method == BucketMethod.Round:
 
@@ -79,5 +101,14 @@ class Potenciala:
     def _compute_potential(self) -> pd.DataFrame:
         return (-1) * self.drift.mean.cumsum()
 
+    def _compute_volatility(self) -> Dict:
+        volatility = {}
+        for i in self.metric_lag_time:
+            volatility[f"vol_{i}"] = self.df[f"drift_{i}"].std()
+
+        return volatility
+
     def get_potential_percentiles(self, drift_col: str) -> pd.DataFrame:
         return (-1) * self.drift.percentiles[drift_col].cumsum()
+
+
