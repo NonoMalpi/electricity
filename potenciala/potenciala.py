@@ -20,9 +20,9 @@ class Potenciala:
                  metric_lag_time: List[int],
                  bucket_method=BucketMethod.Cut,
                  bin_size=2,
-                 no_time_change: bool = True):
+                 time_change: bool = True):
 
-        self.df = self._preprocess_input_df(df=df, no_time_change=no_time_change)
+        self.df = self._preprocess_input_df(df=df, time_change=time_change)
         self.signal_name = signal_name
         self.metric_lag_time = metric_lag_time
         self.bin_size = bin_size
@@ -46,9 +46,9 @@ class Potenciala:
         self.potential = self._compute_potential()
         self.volatility = self._compute_volatility()
 
-    def _preprocess_input_df(self, df: pd.DataFrame, no_time_change: bool) -> pd.DataFrame:
+    def _preprocess_input_df(self, df: pd.DataFrame, time_change: bool) -> pd.DataFrame:
 
-        if not no_time_change:
+        if not time_change:
             return df.copy(deep=True)
         else:
             min_date, max_date = df["date"].min(), df["date"].max()
