@@ -3,6 +3,7 @@ from typing import Dict, List, NoReturn
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from potenciala.metric import Metric
 
@@ -11,6 +12,11 @@ class BucketMethod:
 
     Cut = "cut"
     Round = "round"
+
+
+class FigureShape:
+    TwoDim = "2D"
+    ThreeDim = "3D"
 
 
 class PotencialaBase:
@@ -159,6 +165,8 @@ class VectorTimeSeries(PotencialaBase):
         self.df_vector = self._compute_vector_df()
 
         self._compute_drift()
+        self._compute_diffusion()
+        self._add_x_two_label()
 
         self.samples_hour_x = self._compute_samples_by_hour_x()
         self.drift_hour_x = self._compute_mean_drift_by_hour_x()
@@ -168,6 +176,19 @@ class VectorTimeSeries(PotencialaBase):
         df_vector = self.df.pivot(values=self.signal_name, index=["hour"], columns=["date"])
         df_vector.sort_index(axis=1, inplace=True)
         return df_vector
+
+    def _compute_diffusion(self) -> NoReturn:
+        df_date_hour_drift = self.df.pivot(values=self.drift_cols[0], index=["date"], columns=["hour"])
+        self.diffusion_cols = [f"diffusion_h_{i}" for i in df_date_hour_drift.columns]
+        df_date_hour_drift.columns = self.diffusion_cols
+        self.df = self.df.merge(df_date_hour_drift, how="left", on="date")
+        self.df[self.diffusion_cols] = self.df[self.diffusion_cols].multiply(self.df[self.drift_cols[0]], axis="index")
+
+    def _add_x_two_label(self) -> NoReturn:
+        df_date_hour_x = self.df.pivot(values=self.x_col_name, index=["date"], columns=["hour"])
+        self.x_two_col_names = [f"{self.x_col_name}_2_h_{i}" for i in df_date_hour_x.columns]
+        df_date_hour_x.columns = self.x_two_col_names
+        self.df = self.df.merge(df_date_hour_x, how="left", on="date")
 
     def _get_group_by_hour_x(self) -> pd.core.groupby.generic.SeriesGroupBy:
         return self.df.groupby(["hour", self.x_col_name])[self.drift_cols[0]]
@@ -181,10 +202,42 @@ class VectorTimeSeries(PotencialaBase):
     def _compute_potential(self) -> pd.DataFrame:
         return (-1) * self.drift_hour_x.cumsum(axis=1)
 
-    def plot_hourly_boxplot(self):
+    def plot_hourly_boxplot(self) -> NoReturn:
         fig, ax = plt.subplots(figsize=(20, 7))
         self.df_vector.T.boxplot(ax=ax)
         ax.set_title("Hourly price boxplot")
         ax.set_xlabel("hour")
         ax.set_ylabel("€/MWh")
+        fig.show()
+
+    def _plot_diffusion_2D(self, diff_df: pd.DataFrame, i: int, j: int) -> NoReturn:
+        diff_df = diff_df.unstack(-1)
+        fig, ax = plt.subplots()
+        sns.heatmap(diff_df, cmap='crest', ax=ax)
+        ax.set_xlabel(rf"$X_{{{j}}}$")
+        ax.set_ylabel(rf"$X_{{{i}}}$")
+        ax.set_title("Mean diffusion")
+        fig.show()
+
+    def _plot_diffusion_3D(self, diff_df: pd.DataFrame, i: int, j: int) -> NoReturn:
+        diff_df = diff_df.reset_index()
+        fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(20, 10))
+        ax.scatter(diff_df.iloc[:, 0], diff_df.iloc[:, 1], diff_df.iloc[:, 2])
+        ax.set_ylabel(rf"$X_{{{j}}}$")
+        ax.set_xlabel(rf"$X_{{{i}}}$")
+        ax.set_zlabel("Mean diffusion")
+        fig.show()
+
+    def plot_diffusion_element(self, i: int, j: int, method: FigureShape = FigureShape.TwoDim) -> NoReturn:
+        diff_df = self.df.set_index("hour").loc[i].groupby([
+            self.x_col_name, self.x_two_col_names[j-1]
+        ])[self.diffusion_cols[j-1]].mean()
+
+        if method == FigureShape.TwoDim:
+            self._plot_diffusion_2D(diff_df=diff_df, i=i, j=j)
+        elif method == FigureShape.ThreeDim:
+            self._plot_diffusion_3D(diff_df=diff_df, i=i, j=j)
+
+
+
 

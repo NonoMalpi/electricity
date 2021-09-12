@@ -1,1 +1,1 @@
-from .potenciala import BucketMethod, SingleTimeSeries, VectorTimeSeries
+from .potenciala import BucketMethod, FigureShape, SingleTimeSeries, VectorTimeSeries
