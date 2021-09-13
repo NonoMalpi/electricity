@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from scipy.linalg import sqrtm
+
 from potenciala.metric import Metric
 
 
@@ -172,6 +174,9 @@ class VectorTimeSeries(PotencialaBase):
         self.drift_hour_x = self._compute_mean_drift_by_hour_x()
         self.potential_hour_x = self._compute_potential()
 
+        self.diffusion_matrix = self._compute_diffusion_matrix()
+        self.sqrt_diff_matrix = self._compute_sqrt_diffusion_matrix()
+
     def _compute_vector_df(self) -> pd.DataFrame:
         df_vector = self.df.pivot(values=self.signal_name, index=["hour"], columns=["date"])
         df_vector.sort_index(axis=1, inplace=True)
@@ -197,10 +202,20 @@ class VectorTimeSeries(PotencialaBase):
         return self._get_group_by_hour_x().count().unstack(-1)
 
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
-        return self._get_group_by_hour_x().mean().unstack(-1)
+        drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
+        for col in list(set(np.arange(0, 200, 1, dtype="float64")) - set(drift_hour_x.columns.tolist())):
+            drift_hour_x[col] = 0
+        drift_hour_x.sort_index(axis=1, inplace=True)
+        return drift_hour_x
 
     def _compute_potential(self) -> pd.DataFrame:
         return (-1) * self.drift_hour_x.cumsum(axis=1)
+
+    def _compute_diffusion_matrix(self) -> pd.DataFrame:
+        return self.df.groupby(["hour"])[self.diffusion_cols].mean()
+
+    def _compute_sqrt_diffusion_matrix(self) -> np.ndarray:
+        return sqrtm(self.diffusion_matrix)
 
     def plot_hourly_boxplot(self) -> NoReturn:
         fig, ax = plt.subplots(figsize=(20, 7))
