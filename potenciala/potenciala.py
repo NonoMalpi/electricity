@@ -177,6 +177,8 @@ class VectorTimeSeries(PotencialaBase):
         self.diffusion_matrix = self._compute_diffusion_matrix()
         self.sqrt_diff_matrix = self._compute_sqrt_diffusion_matrix()
 
+        self.diff_xi_xj = self._compute_diff_matrix_components()
+
     def _compute_vector_df(self) -> pd.DataFrame:
         df_vector = self.df.pivot(values=self.signal_name, index=["hour"], columns=["date"])
         df_vector.sort_index(axis=1, inplace=True)
@@ -203,6 +205,7 @@ class VectorTimeSeries(PotencialaBase):
 
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
         drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
+        # fill missing x values with zero diff
         for col in list(set(np.arange(0, 200, 1, dtype="float64")) - set(drift_hour_x.columns.tolist())):
             drift_hour_x[col] = 0
         drift_hour_x.sort_index(axis=1, inplace=True)
@@ -216,6 +219,26 @@ class VectorTimeSeries(PotencialaBase):
 
     def _compute_sqrt_diffusion_matrix(self) -> np.ndarray:
         return sqrtm(self.diffusion_matrix)
+
+    def _compute_diff_xi_xj(self, i: int, j: int) -> pd.DataFrame:
+        diff_df = self.df.set_index("hour").loc[i].groupby([
+            self.x_col_name, self.x_two_col_names[j - 1]
+        ])[self.diffusion_cols[j - 1]].mean().unstack(-1)
+        # fill missing xi, xj values with zero diff
+        for col in list(set(np.arange(0, 200, 1, dtype="float64")) - set(diff_df.columns.tolist())):
+            diff_df[col] = np.nan
+        for row in list(set(np.arange(0, 200, 1, dtype="float64")) - set(diff_df.index.tolist())):
+            diff_df.loc[row] = np.nan
+        diff_df.index.name = f"X_{i}"
+        diff_df.columns.name = f"X_{j}"
+        return diff_df.sort_index(axis=0).sort_index(axis=1)
+
+    def _compute_diff_matrix_components(self) -> np.ndarray:
+        diff_components_array = np.zeros(shape=(24, 24), dtype=pd.DataFrame)
+        for i in range(1, 25):
+            for j in range(1, i+1):
+                diff_components_array[i-1, j-1] = self._compute_diff_xi_xj(i=i, j=j)
+        return diff_components_array
 
     def plot_hourly_boxplot(self) -> NoReturn:
         fig, ax = plt.subplots(figsize=(20, 7))
