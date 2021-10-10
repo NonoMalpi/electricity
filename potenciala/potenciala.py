@@ -8,14 +8,17 @@ import seaborn as sns
 from scipy.linalg import sqrtm
 
 from potenciala.metric import Metric
+from potenciala.transformers import TransformerFactory
 
 
+# TODO: Convert to Enum
 class BucketMethod:
 
     Cut = "cut"
     Round = "round"
 
 
+# TODO: Convert to Enum
 class FigureShape:
     TwoDim = "2D"
     ThreeDim = "3D"
@@ -30,15 +33,24 @@ class PotencialaBase:
                  bucket_method=BucketMethod.Cut,
                  bin_size=2,
                  time_change: bool = True,
-                 x_col_name: str = "x_label"):
+                 x_col_name: str = "x_label",
+                 signal_transformation: str = None):
 
-        self.signal_name = signal_name
+        self.transformer = TransformerFactory.build(transformer_type=signal_transformation)
+
+        self.signal_name, df = self._transform_signal(df=df, signal_name=signal_name)
         self.metric_lag_time = metric_lag_time
         self.bin_size = bin_size
         self.x_col_name = x_col_name
 
         self.df = self._preprocess_input_df(df=df, time_change=time_change)
         self._bucketise_signal(method=bucket_method, x_col_name=self.x_col_name)
+
+    def _transform_signal(self, df: pd.DataFrame, signal_name: str):
+        df = df.copy(deep=True)
+        new_name = self.transformer.rename_signal(signal_name=signal_name)
+        df[new_name] = self.transformer.transform(series=df[signal_name])
+        return new_name, df
 
     def _preprocess_input_df(self, df: pd.DataFrame, time_change: bool) -> pd.DataFrame:
 
@@ -85,6 +97,19 @@ class PotencialaBase:
             self.df[drift_col_name] = self.df[self.signal_name].shift(-i) - self.df[self.signal_name]
             self.drift_cols.append(drift_col_name)
 
+    def _plot_ts(self, ts: pd.DataFrame, signal_name: str) -> NoReturn:
+        ts_index = (pd.to_datetime(ts["date"]) + pd.to_timedelta(ts["hour"] - 1, unit="H"))
+        ts_df = pd.DataFrame(index=ts_index, data=ts[signal_name].values)
+
+        fig, ax = plt.subplots(figsize=(20, 7))
+        ts_df.plot(ax=ax)
+        ax.get_legend().remove()
+
+    def plot_ts(self, signal_name: str = None, period_filter: str = None):
+        if not signal_name:
+            signal_name = self.signal_name
+        self._plot_ts(self.df if not period_filter else self.df.query(period_filter), signal_name=signal_name)
+
 
 class SingleTimeSeries(PotencialaBase):
 
@@ -96,7 +121,8 @@ class SingleTimeSeries(PotencialaBase):
                  bucket_method=BucketMethod.Cut,
                  bin_size=2,
                  time_change: bool = True,
-                 x_col_name: str = "x_label"):
+                 x_col_name: str = "x_label",
+                 signal_transformation: str = None):
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -104,7 +130,8 @@ class SingleTimeSeries(PotencialaBase):
                          bucket_method=bucket_method,
                          bin_size=bin_size,
                          time_change=time_change,
-                         x_col_name=x_col_name)
+                         x_col_name=x_col_name,
+                         signal_transformation=signal_transformation)
 
         base_cols = ["year", "month", "day", "hour"]
 
@@ -154,7 +181,8 @@ class VectorTimeSeries(PotencialaBase):
                  bucket_method=BucketMethod.Cut,
                  bin_size=2,
                  time_change: bool = True,
-                 x_col_name: str = "x_label"):
+                 x_col_name: str = "x_label",
+                 signal_transformation: str = None):
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -162,7 +190,8 @@ class VectorTimeSeries(PotencialaBase):
                          bucket_method=bucket_method,
                          bin_size=bin_size,
                          time_change=time_change,
-                         x_col_name=x_col_name)
+                         x_col_name=x_col_name,
+                         signal_transformation=signal_transformation)
 
         self.df_vector = self._compute_vector_df()
 
