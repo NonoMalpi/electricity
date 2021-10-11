@@ -188,6 +188,7 @@ class VectorTimeSeries(PotencialaBase):
                  bin_size=2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
+                 diff_matrix_xi_xj_computation: bool = False,
                  signal_transformation: str = None,
                  x_transformation: str = None):
 
@@ -214,7 +215,8 @@ class VectorTimeSeries(PotencialaBase):
         self.diffusion_matrix = self._compute_diffusion_matrix()
         self.sqrt_diff_matrix = self._compute_sqrt_diffusion_matrix()
 
-        self.diff_xi_xj = self._compute_diff_matrix_components()
+        if diff_matrix_xi_xj_computation:
+            self.diff_xi_xj = self._compute_diff_matrix_components()
 
     def _compute_vector_df(self) -> pd.DataFrame:
         df_vector = self.df.pivot(values=self.signal_name, index=["hour"], columns=["date"])
@@ -245,7 +247,7 @@ class VectorTimeSeries(PotencialaBase):
         # fill missing x values with zero drift
         min_x = drift_hour_x.columns.min()
         max_x = drift_hour_x.columns.max()
-        for col in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(drift_hour_x.columns.tolist())):
+        for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(drift_hour_x.columns.tolist())):
             drift_hour_x[col] = 0
         drift_hour_x.sort_index(axis=1, inplace=True)
         return drift_hour_x
@@ -273,9 +275,9 @@ class VectorTimeSeries(PotencialaBase):
         max_x = max(max_col_x, max_row_x)
 
         # fill missing xi, xj values with zero diff
-        for col in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(diff_df.columns.tolist())):
+        for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(diff_df.columns.tolist())):
             diff_df[col] = 0
-        for row in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(diff_df.index.tolist())):
+        for row in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(diff_df.index.tolist())):
             diff_df.loc[row] = 0
         diff_df.index.name = f"X_{i}"
         diff_df.columns.name = f"X_{j}"
