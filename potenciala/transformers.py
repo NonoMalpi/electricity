@@ -24,6 +24,17 @@ class NoneTransformer(Transformer):
         return series
 
 
+class BackDrift24Transformer(Transformer):
+
+    @staticmethod
+    def rename_signal(signal_name: str):
+        return "back_drift_" + signal_name
+
+    @staticmethod
+    def transform(series: pd.Series):
+        return series - series.shift(24)
+
+
 class LogTransformer(Transformer):
 
     @staticmethod
@@ -38,8 +49,9 @@ class LogTransformer(Transformer):
 class TransformerFactory:
 
     Constructor = {
-        "Log": LogTransformer,
         "None": NoneTransformer,
+        "back_drift": BackDrift24Transformer,
+        "log": LogTransformer,
     }
 
     @staticmethod

@@ -34,9 +34,11 @@ class PotencialaBase:
                  bin_size=2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
-                 signal_transformation: str = None):
+                 signal_transformation: str = None,
+                 x_transformation: str = None):
 
-        self.transformer = TransformerFactory.build(transformer_type=signal_transformation)
+        self.signal_transformer = TransformerFactory.build(transformer_type=signal_transformation)
+        self.x_transformer = TransformerFactory.build(transformer_type=x_transformation)
 
         self.signal_name, df = self._transform_signal(df=df, signal_name=signal_name)
         self.metric_lag_time = metric_lag_time
@@ -44,12 +46,12 @@ class PotencialaBase:
         self.x_col_name = x_col_name
 
         self.df = self._preprocess_input_df(df=df, time_change=time_change)
-        self._bucketise_signal(method=bucket_method, x_col_name=self.x_col_name)
+        self._bucketise_x(method=bucket_method)
 
     def _transform_signal(self, df: pd.DataFrame, signal_name: str):
         df = df.copy(deep=True)
-        new_name = self.transformer.rename_signal(signal_name=signal_name)
-        df[new_name] = self.transformer.transform(series=df[signal_name])
+        new_name = self.signal_transformer.rename_signal(signal_name=signal_name)
+        df[new_name] = self.signal_transformer.transform(series=df[signal_name])
         return new_name, df
 
     def _preprocess_input_df(self, df: pd.DataFrame, time_change: bool) -> pd.DataFrame:
@@ -72,23 +74,25 @@ class PotencialaBase:
 
             return result_df
 
-    def _bucketise_signal(self, method: str, x_col_name: str) -> NoReturn:
+    def _bucketise_x(self, method: str) -> NoReturn:
+
+        x_transformed = self.x_transformer.transform(self.df[self.signal_name])
 
         if method == BucketMethod.Cut:
 
             x_axis = np.arange(
-                self.df[self.signal_name].min(),
-                self.df[self.signal_name].max() + 2*self.bin_size,
+                x_transformed.min(),
+                x_transformed.max() + 2*self.bin_size,
                 self.bin_size
             )
 
-            self.df[x_col_name] = pd.cut(
-                x=self.df[self.signal_name], bins=x_axis, labels=x_axis[:-1], right=False
+            self.df[self.x_col_name] = pd.cut(
+                x=x_transformed, bins=x_axis, labels=x_axis[:-1], right=False
             ).astype(float)
 
         elif method == BucketMethod.Round:
 
-            self.df[x_col_name] = self.df[self.signal_name].round(decimals=0)
+            self.df[self.x_col_name] = x_transformed.round(decimals=0)
 
     def _compute_drift(self) -> NoReturn:
         self.drift_cols = []
@@ -122,7 +126,8 @@ class SingleTimeSeries(PotencialaBase):
                  bin_size=2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
-                 signal_transformation: str = None):
+                 signal_transformation: str = None,
+                 x_transformation: str = None):
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -131,7 +136,8 @@ class SingleTimeSeries(PotencialaBase):
                          bin_size=bin_size,
                          time_change=time_change,
                          x_col_name=x_col_name,
-                         signal_transformation=signal_transformation)
+                         signal_transformation=signal_transformation,
+                         x_transformation=x_transformation)
 
         base_cols = ["year", "month", "day", "hour"]
 
@@ -182,7 +188,8 @@ class VectorTimeSeries(PotencialaBase):
                  bin_size=2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
-                 signal_transformation: str = None):
+                 signal_transformation: str = None,
+                 x_transformation: str = None):
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -191,7 +198,8 @@ class VectorTimeSeries(PotencialaBase):
                          bin_size=bin_size,
                          time_change=time_change,
                          x_col_name=x_col_name,
-                         signal_transformation=signal_transformation)
+                         signal_transformation=signal_transformation,
+                         x_transformation=x_transformation)
 
         self.df_vector = self._compute_vector_df()
 
@@ -234,8 +242,10 @@ class VectorTimeSeries(PotencialaBase):
 
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
         drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
-        # fill missing x values with zero diff
-        for col in list(set(np.arange(0, 260, 1, dtype="float64")) - set(drift_hour_x.columns.tolist())):
+        # fill missing x values with zero drift
+        min_x = drift_hour_x.columns.min()
+        max_x = drift_hour_x.columns.max()
+        for col in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(drift_hour_x.columns.tolist())):
             drift_hour_x[col] = 0
         drift_hour_x.sort_index(axis=1, inplace=True)
         return drift_hour_x
@@ -253,11 +263,20 @@ class VectorTimeSeries(PotencialaBase):
         diff_df = self.df.set_index("hour").loc[i].groupby([
             self.x_col_name, self.x_two_col_names[j - 1]
         ])[self.diffusion_cols[j - 1]].mean().unstack(-1)
+
+        min_col_x = diff_df.columns.min()
+        min_row_x = diff_df.index.min()
+        min_x = min(min_col_x, min_row_x)
+
+        max_col_x = diff_df.columns.max()
+        max_row_x = diff_df.index.max()
+        max_x = max(max_col_x, max_row_x)
+
         # fill missing xi, xj values with zero diff
-        for col in list(set(np.arange(0, 260, 1, dtype="float64")) - set(diff_df.columns.tolist())):
-            diff_df[col] = np.nan
-        for row in list(set(np.arange(0, 260, 1, dtype="float64")) - set(diff_df.index.tolist())):
-            diff_df.loc[row] = np.nan
+        for col in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(diff_df.columns.tolist())):
+            diff_df[col] = 0
+        for row in list(set(np.arange(min_x, max_x, 1, dtype="float64")) - set(diff_df.index.tolist())):
+            diff_df.loc[row] = 0
         diff_df.index.name = f"X_{i}"
         diff_df.columns.name = f"X_{j}"
         return diff_df.sort_index(axis=0).sort_index(axis=1)
