@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Dict, List, NoReturn
 
 import matplotlib.pyplot as plt
@@ -11,15 +12,12 @@ from potenciala.metric import Metric
 from potenciala.transformers import TransformerFactory
 
 
-# TODO: Convert to Enum
-class BucketMethod:
-
+class BucketMethod(Enum):
     Cut = "cut"
     Round = "round"
 
 
-# TODO: Convert to Enum
-class FigureShape:
+class FigureShape(Enum):
     TwoDim = "2D"
     ThreeDim = "3D"
 
@@ -74,7 +72,7 @@ class PotencialaBase:
 
             return result_df
 
-    def _bucketise_x(self, method: str) -> NoReturn:
+    def _bucketise_x(self, method: BucketMethod) -> NoReturn:
 
         x_transformed = self.x_transformer.transform(self.df[self.signal_name])
 
@@ -325,7 +323,3 @@ class VectorTimeSeries(PotencialaBase):
             self._plot_diffusion_2D(diff_df=diff_df, i=i, j=j)
         elif method == FigureShape.ThreeDim:
             self._plot_diffusion_3D(diff_df=diff_df, i=i, j=j)
-
-
-
-
