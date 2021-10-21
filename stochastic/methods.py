@@ -47,7 +47,8 @@ class EulerMaruyama:
     def simulate(self, x0: np.ndarray, random_seed: float = 0):
         """
 
-        x0: np.ndarray(ndim, t)
+        x0: np.ndarray (n_dim, ) or (n_dim, t)
+            Initial value with (n_dim,) for one single timestep or (n_dim, t) for multiple timesteps
         """
         sim_df = pd.DataFrame()
 
