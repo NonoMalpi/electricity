@@ -15,6 +15,7 @@ from potenciala.transformers import TransformerFactory
 class BucketMethod(Enum):
     Cut = "cut"
     Round = "round"
+    NoBucket = "no_bucket"
 
 
 class FigureShape(Enum):
@@ -77,7 +78,6 @@ class PotencialaBase:
         x_transformed = self.x_transformer.transform(self.df[self.signal_name])
 
         if method == BucketMethod.Cut:
-
             x_axis = np.arange(
                 x_transformed.min(),
                 x_transformed.max() + 2*self.bin_size,
@@ -89,8 +89,10 @@ class PotencialaBase:
             ).astype(float)
 
         elif method == BucketMethod.Round:
-
             self.df[self.x_col_name] = x_transformed.round(decimals=0)
+
+        elif method == BucketMethod.NoBucket:
+            self.df[self.x_col_name] = x_transformed
 
     def _compute_drift(self) -> NoReturn:
         self.drift_cols = []
