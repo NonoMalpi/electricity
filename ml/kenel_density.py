@@ -22,6 +22,8 @@ class GaussianKernel:
                                          ymin=ymin, ymax=ymax,
                                          zmin=zmin, zmax=zmax)
         p = self._compute_mesh_prob(mesh=mesh, new_shape=grid[0].shape)
+        self.expected_value_function = self._compute_expected_value_function(grid=grid, p=p)
+        self.expected_value = self._compute_expected_value()
 
     def _fit_gaussian_kernel(self, samples_df: pd.DataFrame) -> Tuple[stats.kde.gaussian_kde, np.ndarray]:
         values = samples_df.values.T
@@ -63,7 +65,7 @@ class GaussianKernel:
     def _compute_mesh_prob(self, mesh: np.ndarray, new_shape: Tuple[int, ...]):
         return np.reshape(self.kernel(mesh).T, new_shape)
 
-    def _compute_expected_value(self, grid: Tuple[np.ndarray, ...], p: np.ndarray):
+    def _compute_expected_value_function(self, grid: Tuple[np.ndarray, ...], p: np.ndarray):
 
         if len(grid) == 2:
             x_range = grid[0][:, 0]
@@ -71,14 +73,13 @@ class GaussianKernel:
             for i in range(x_range.shape[0]):
                 expected_value_x[i] = np.average(grid[1][i], weights=p[i])
 
-            #return np.vstack([x_range, expected_value_x])
-            return pd.Series(expected_value_x, index=x_range)
+            return np.vstack([x_range, expected_value_x])
+            #return pd.Series(expected_value_x, index=x_range)
 
         elif len(grid) == 3:
             x, y, z = grid[0], grid[1], grid[2]
             x_range = x[:, :, 0]
             y_range = y[:, :, 0]
-            mesh_x_y = np.vstack([x_range.ravel(), y_range.ravel()])
 
             expected_value_x_y = np.zeros(x_range.ravel())
             for i in range(x.shape[0]):
@@ -88,5 +89,8 @@ class GaussianKernel:
                     else:
                         expected_value_x_y[i*x.shape[0] + j] = np.average(z[i][j], weights=p[i][j])
 
-            return np.vstack([mesh_x_y, expected_value_x_y])
+            return np.vstack([x_range.ravel(), y_range.ravel(), expected_value_x_y])
 
+    def _compute_expected_value(self):
+        p_expected_elements = self.kernel(self.expected_value_function)
+        return np.average(self.expected_value_function[-1, :], weights=p_expected_elements)
