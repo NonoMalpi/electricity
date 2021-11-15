@@ -27,16 +27,16 @@ class GaussianKernel:
         self.computation_mode = computation_mode
 
         self.kernel, self.samples = self._fit_gaussian_kernel(samples_df=samples)
-        mesh, self.grid = self._generate_mesh(grid_shape=grid_shape,
+        mesh, grid = self._generate_mesh(grid_shape=grid_shape,
                                          xmin=xmin, xmax=xmax,
                                          ymin=ymin, ymax=ymax,
                                          zmin=zmin, zmax=zmax)
-        self.p = self._compute_mesh_prob(mesh=mesh, new_shape=self.grid[0].shape)
-        self.expected_value_function = self._compute_expected_value_function(grid=self.grid, p=self.p)
+        p = self._compute_mesh_prob(mesh=mesh, new_shape=grid[0].shape)
+        self.expected_value_function = self._compute_expected_value_function(grid=grid, p=p)
         self.expected_value = self._compute_expected_value()
-        self.most_likely, most_likely_indexes = self._get_most_likely(grid=self.grid, p=self.p)
+        self.most_likely, most_likely_indexes = self._get_most_likely(grid=grid, p=p)
         self.expected_value_from_most_likely = self._get_expected_value_from_most_likely(
-            indexes=most_likely_indexes, grid=self.grid
+            indexes=most_likely_indexes, grid=grid
         )
 
     def _fit_gaussian_kernel(self, samples_df: pd.DataFrame) -> Tuple[stats.kde.gaussian_kde, np.ndarray]:
