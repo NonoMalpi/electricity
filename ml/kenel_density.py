@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -89,13 +89,31 @@ class GaussianKernel:
 
     @staticmethod
     @jit(nopython=True)
-    def _compute_expectation_numba(grid: Tuple[np.ndarray, ...], p: np.ndarray):
-        x_range = grid[0][:, 0]
-        expected_value_x = np.zeros_like(x_range)
-        for i in range(x_range.shape[0]):
-            expected_value_x[i] = np.sum(grid[1][i] * p[i]) / np.sum(p[i])
+    def _compute_expectation_numba(grid: Tuple[np.ndarray, ...], p: np.ndarray) -> List[np.ndarray]:
 
-        return expected_value_x
+        if len(grid) == 2:
+            x_range = grid[0][:, 0]
+            expected_value_x = np.zeros_like(x_range)
+            for i in range(x_range.shape[0]):
+                expected_value_x[i] = sum(grid[1][i] * p[i]) / sum(p[i])
+
+            return [x_range, expected_value_x]
+
+        elif len(grid) == 3:
+            x, y, z = grid[0], grid[1], grid[2]
+            x_range = x[:, :, 0]
+            y_range = y[:, :, 0]
+
+            expected_value_x_y = np.zeros_like(x_range.ravel())
+            for i in range(x.shape[0]):
+                for j in range(y[i].shape[0]):
+                    # if sum of probabilities across z is 0 do not compute average
+                    if sum(p[i][j]) == 0:
+                        expected_value_x_y[i * x.shape[1] + j] = 0
+                    else:
+                        expected_value_x_y[i * x.shape[1] + j] = sum(z[i][j] * p[i][j]) / sum(p[i][j])
+
+            return [x_range.ravel(), y_range.ravel(), expected_value_x_y]
 
     def _compute_expected_value_function(self, grid: Tuple[np.ndarray, ...], p: np.ndarray) -> np.ndarray:
         # TODO: Refactor method and check parallelisation
@@ -120,11 +138,7 @@ class GaussianKernel:
                 return np.vstack([x_range, expected_value_x])
 
         elif self.parallel_mode == ComputationMode.Numba:
-
-            if len(grid) == 2:
-                x_range = grid[0][:, 0]
-                expected_value_x = self._compute_expectation_numba(grid=grid, p=p)
-                np.vstack([x_range, expected_value_x])
+            return np.vstack(self._compute_expectation_numba(grid=grid, p=p))
 
         elif self.parallel_mode == ComputationMode.Simple:
 
