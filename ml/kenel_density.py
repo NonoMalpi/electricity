@@ -4,14 +4,11 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
-from joblib import Parallel, delayed
 from numba import jit
 from scipy import stats
 
 
 class ComputationMode(Enum):
-    Joblib = "joblib"
-    ListComprehension = "comprehension"
     Numba = "numba"
     Simple = "simple"
 
@@ -24,10 +21,10 @@ class GaussianKernel:
                  xmin: float = None, xmax: float = None,
                  ymin: float = None, ymax: float = None,
                  zmin: float = None, zmax: float = None,
-                 parallel_mode: ComputationMode = ComputationMode.Simple
+                 computation_mode: ComputationMode = ComputationMode.Simple
                  ):
 
-        self.parallel_mode = parallel_mode
+        self.computation_mode = computation_mode
 
         self.kernel, self.samples = self._fit_gaussian_kernel(samples_df=samples)
         mesh, self.grid = self._generate_mesh(grid_shape=grid_shape,
@@ -90,6 +87,7 @@ class GaussianKernel:
     @staticmethod
     @jit(nopython=True)
     def _compute_expectation_numba(grid: Tuple[np.ndarray, ...], p: np.ndarray) -> List[np.ndarray]:
+        # TODO: Refactor method
 
         if len(grid) == 2:
             x_range = grid[0][:, 0]
@@ -116,55 +114,12 @@ class GaussianKernel:
             return [x_range.ravel(), y_range.ravel(), expected_value_x_y]
 
     def _compute_expected_value_function(self, grid: Tuple[np.ndarray, ...], p: np.ndarray) -> np.ndarray:
-        # TODO: Refactor method and check parallelisation
 
-        if self.parallel_mode == ComputationMode.Joblib:
-
-            if len(grid) == 2:
-                x_range = grid[0][:, 0]
-                expected_value_x = Parallel(n_jobs=-1, verbose=0)(delayed(self._compute_expectation)(
-                    values=grid[1][i], weights=p[i]) for i in range(x_range.shape[0]))
-                expected_value_x = np.array(expected_value_x)
-
-                return np.vstack([x_range, expected_value_x])
-
-        elif self.parallel_mode == ComputationMode.ListComprehension:
-
-            if len(grid) == 2:
-                x_range = grid[0][:, 0]
-                expected_value_x = [np.average(grid[1][i], weights=p[i]) for i in range(x_range.shape[0])]
-                expected_value_x = np.array(expected_value_x)
-
-                return np.vstack([x_range, expected_value_x])
-
-        elif self.parallel_mode == ComputationMode.Numba:
+        if self.computation_mode == ComputationMode.Numba:
             return np.vstack(self._compute_expectation_numba(grid=grid, p=p))
 
-        elif self.parallel_mode == ComputationMode.Simple:
-
-            if len(grid) == 2:
-                x_range = grid[0][:, 0]
-                expected_value_x = np.zeros_like(x_range)
-                for i in range(x_range.shape[0]):
-                    expected_value_x[i] = np.average(grid[1][i], weights=p[i])
-
-                return np.vstack([x_range, expected_value_x])
-
-            elif len(grid) == 3:
-                x, y, z = grid[0], grid[1], grid[2]
-                x_range = x[:, :, 0]
-                y_range = y[:, :, 0]
-
-                expected_value_x_y = np.zeros_like(x_range.ravel())
-                for i in range(x.shape[0]):
-                    for j in range(y[i].shape[0]):
-                        # if sum of probabilities across z is 0 do not compute average
-                        if np.sum(p[i][j]) == 0:
-                            expected_value_x_y[i*x.shape[1] + j] = 0
-                        else:
-                            expected_value_x_y[i*x.shape[1] + j] = np.average(z[i][j], weights=p[i][j])
-
-                return np.vstack([x_range.ravel(), y_range.ravel(), expected_value_x_y])
+        elif self.computation_mode == ComputationMode.Simple:
+            return np.vstack(self._compute_expectation_numba.py_func(grid=grid, p=p))
 
     def _compute_expected_value(self) -> float:
         p_expected_elements = self.kernel(self.expected_value_function)
