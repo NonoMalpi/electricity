@@ -25,7 +25,9 @@ class GaussianKernel:
         self.expected_value_function = self._compute_expected_value_function(grid=grid, p=p)
         self.expected_value = self._compute_expected_value()
         self.most_likely, most_likely_indexes = self._get_most_likely(grid=grid, p=p)
-        self.expected_value_from_most_likely = self._get_expected_value_from_most_likely(indexes=most_likely_indexes)
+        self.expected_value_from_most_likely = self._get_expected_value_from_most_likely(
+            indexes=most_likely_indexes, grid=grid
+        )
 
     def _fit_gaussian_kernel(self, samples_df: pd.DataFrame) -> Tuple[stats.kde.gaussian_kde, np.ndarray]:
         values = samples_df.values.T
@@ -124,7 +126,9 @@ class GaussianKernel:
 
             return most_likely, indexes
 
-    def _get_expected_value_from_most_likely(self, indexes: Tuple[int, ...]) -> np.ndarray:
+    def _get_expected_value_from_most_likely(self,
+                                             indexes: Tuple[int, ...],
+                                             grid: Tuple[np.ndarray, ...]) -> np.ndarray:
 
         if len(indexes) == 2:
             x_index = indexes[0]
@@ -132,5 +136,6 @@ class GaussianKernel:
 
         if len(indexes) == 3:
             x_index, y_index = indexes[0], indexes[1]
-            return self.expected_value_function
+            x = grid[0]
+            return self.expected_value_function[:, x_index*x.shape[1]+y_index]
 
