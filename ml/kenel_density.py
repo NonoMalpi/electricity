@@ -27,16 +27,16 @@ class GaussianKernel:
         self.computation_mode = computation_mode
 
         self.kernel, self.samples = self._fit_gaussian_kernel(samples_df=samples)
-        mesh, grid = self._generate_mesh(grid_shape=grid_shape,
+        mesh, self.grid = self._generate_mesh(grid_shape=grid_shape,
                                          xmin=xmin, xmax=xmax,
                                          ymin=ymin, ymax=ymax,
                                          zmin=zmin, zmax=zmax)
-        p = self._compute_mesh_prob(mesh=mesh, new_shape=grid[0].shape)
-        self.expected_value_function = self._compute_expected_value_function(grid=grid, p=p)
+        self.p = self._compute_mesh_prob(mesh=mesh)
+        self.expected_value_function = self._compute_expected_value_function()
         self.expected_value = self._compute_expected_value()
-        self.most_likely, most_likely_indexes = self._get_most_likely(grid=grid, p=p)
+        self.most_likely, most_likely_indexes = self._get_most_likely()
         self.expected_value_from_most_likely = self._get_expected_value_from_most_likely(
-            indexes=most_likely_indexes, grid=grid
+            indexes=most_likely_indexes
         )
 
     def _fit_gaussian_kernel(self, samples_df: pd.DataFrame) -> Tuple[stats.kde.gaussian_kde, np.ndarray]:
@@ -77,12 +77,8 @@ class GaussianKernel:
 
             return mesh, (X, Y)
 
-    def _compute_mesh_prob(self, mesh: np.ndarray, new_shape: Tuple[int, ...]) -> np.ndarray:
-        return np.reshape(self.kernel(mesh).T, new_shape)
-
-    @staticmethod
-    def _compute_expectation(values: np.ndarray, weights: np.ndarray) -> float:
-        return np.average(values, weights=weights)
+    def _compute_mesh_prob(self, mesh: np.ndarray) -> np.ndarray:
+        return np.reshape(self.kernel(mesh).T, self.grid[0].shape)
 
     @staticmethod
     @jit(nopython=True)
@@ -113,25 +109,25 @@ class GaussianKernel:
 
             return [x_range.ravel(), y_range.ravel(), expected_value_x_y]
 
-    def _compute_expected_value_function(self, grid: Tuple[np.ndarray, ...], p: np.ndarray) -> np.ndarray:
+    def _compute_expected_value_function(self) -> np.ndarray:
 
         if self.computation_mode == ComputationMode.Numba:
-            return np.vstack(self._compute_expectation_numba(grid=grid, p=p))
+            return np.vstack(self._compute_expectation_numba(grid=self.grid, p=self.p))
 
         elif self.computation_mode == ComputationMode.Simple:
-            return np.vstack(self._compute_expectation_numba.py_func(grid=grid, p=p))
+            return np.vstack(self._compute_expectation_numba.py_func(grid=self.grid, p=self.p))
 
     def _compute_expected_value(self) -> float:
         p_expected_elements = self.kernel(self.expected_value_function)
         return np.average(self.expected_value_function[-1, :], weights=p_expected_elements)
 
-    def _get_most_likely(self, grid: np.ndarray, p: np.ndarray) -> Tuple[np.ndarray, Tuple[int, ...]]:
+    def _get_most_likely(self) -> Tuple[np.ndarray, Tuple[int, ...]]:
         #TODO: Refactor method
-        indexes = np.unravel_index(p.argmax(), p.shape)
+        indexes = np.unravel_index(self.p.argmax(), self.p.shape)
 
         if len(indexes) == 2:
             x_index, y_index = indexes[0], indexes[1]
-            x, y = grid[0], grid[1]
+            x, y = self.grid[0], self.grid[1]
             most_likely = np.array([
                 x[x_index][y_index],
                 y[x_index][y_index]
@@ -140,7 +136,7 @@ class GaussianKernel:
 
         if len(indexes) == 3:
             x_index, y_index, z_index = indexes[0], indexes[1], indexes[2]
-            x, y, z = grid[0], grid[1], grid[2]
+            x, y, z = self.grid[0], self.grid[1], self.grid[2]
             most_likely = np.array([
                 x[x_index][y_index][z_index],
                 y[x_index][y_index][z_index],
@@ -149,9 +145,7 @@ class GaussianKernel:
 
             return most_likely, indexes
 
-    def _get_expected_value_from_most_likely(self,
-                                             indexes: Tuple[int, ...],
-                                             grid: Tuple[np.ndarray, ...]) -> np.ndarray:
+    def _get_expected_value_from_most_likely(self, indexes: Tuple[int, ...]) -> np.ndarray:
 
         if len(indexes) == 2:
             x_index = indexes[0]
@@ -159,6 +153,6 @@ class GaussianKernel:
 
         if len(indexes) == 3:
             x_index, y_index = indexes[0], indexes[1]
-            x = grid[0]
+            x = self.grid[0]
             return self.expected_value_function[:, x_index*x.shape[1]+y_index]
 
