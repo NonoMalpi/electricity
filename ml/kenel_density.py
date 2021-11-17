@@ -4,6 +4,7 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 
+from joblib import Parallel, delayed
 from numba import jit
 from scipy import stats
 
@@ -21,10 +22,12 @@ class GaussianKernel:
                  xmin: float = None, xmax: float = None,
                  ymin: float = None, ymax: float = None,
                  zmin: float = None, zmax: float = None,
-                 computation_mode: ComputationMode = ComputationMode.Simple
+                 computation_mode: ComputationMode = ComputationMode.Simple,
+                 mesh_chunks: int = 8
                  ):
 
         self.computation_mode = computation_mode
+        self.mesh_chunks = mesh_chunks
 
         self.kernel, self.samples = self._fit_gaussian_kernel(samples_df=samples)
         mesh, self.grid = self._generate_mesh(grid_shape=grid_shape,
@@ -77,8 +80,18 @@ class GaussianKernel:
 
             return mesh, (X, Y)
 
+    def _compute_mesh_chunk_prob(self, mesh_chunk: np.ndarray) -> np.ndarray:
+        return self.kernel(mesh_chunk)
+
     def _compute_mesh_prob(self, mesh: np.ndarray) -> np.ndarray:
-        return np.reshape(self.kernel(mesh).T, self.grid[0].shape)
+        mesh_chunks_array = np.split(mesh, indices_or_sections=self.mesh_chunks, axis=1)
+        prob_chunks = Parallel(n_jobs=-1, verbose=1)(
+            delayed(self._compute_mesh_chunk_prob)(mesh_chunk=chunk)
+            for chunk in mesh_chunks_array
+        )
+
+        prob = np.concatenate(prob_chunks)
+        return np.reshape(prob.T, self.grid[0].shape)
 
     @staticmethod
     @jit(nopython=True)
