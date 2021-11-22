@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-from stochastic.coefficients import Coefficient, SpatialDriftMultivariate, ConstantDiffusionMultivariate
+from stochastic.coefficients import Coefficient
 
 
 class EulerMaruyama:
@@ -60,9 +60,9 @@ class EulerMaruyama:
             for t in range(x0_time_step, self.period):
                 y_t_1 = y[:, t-1]
                 y_t = y_t_1 + self.drift.get_value(x=y, t=t)*self.delta_t + \
-                      np.dot(self.diffusion.get_value(x=y, t=t),
-                             np.random.normal(loc=self.nu, scale=self.delta_t, size=(x0_dim, 1))
-                             ).reshape(-1)
+                      (1/2) * np.dot(self.diffusion.get_value(x=y, t=t),
+                                     np.random.normal(loc=self.nu, scale=self.delta_t, size=(x0_dim, 1))
+                                     ).reshape(-1)
                 y_t = np.where(y_t < 0, 0, y_t)
                 y[:, t] = y_t
             sim_df[i] = y.flatten("F")

@@ -243,12 +243,12 @@ class VectorTimeSeries(PotencialaBase):
         return self._get_group_by_hour_x().count().unstack(-1)
 
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
-        drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1)#.fillna(0)
+        drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
         # fill missing x values with zero drift
-        #min_x = drift_hour_x.columns.min()
-        #max_x = drift_hour_x.columns.max()
-        #for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(drift_hour_x.columns.tolist())):
-        #    drift_hour_x[col] = 0
+        min_x = drift_hour_x.columns.min()
+        max_x = drift_hour_x.columns.max()
+        for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(drift_hour_x.columns.tolist())):
+            drift_hour_x[col] = 0
         drift_hour_x.sort_index(axis=1, inplace=True)
         return drift_hour_x
 
