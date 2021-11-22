@@ -10,7 +10,7 @@ class EulerMaruyama:
 
     def __init__(self,
                  num_sim: int,
-                 period: int,
+                 periods: int,
                  delta_t: float,
                  nu: float,
                  drift: Coefficient,
@@ -18,7 +18,7 @@ class EulerMaruyama:
                  ):
 
         self.num_sim = num_sim
-        self.period = period
+        self.periods = periods
         self.delta_t = delta_t
         self.sqrt_delta_t = np.sqrt(delta_t)
         self.nu = nu
@@ -40,12 +40,12 @@ class EulerMaruyama:
         return x0, x0_dim, x0_time_step
 
     def _set_y_array(self, x0: np.ndarray, x0_dim: int, x0_time_step: int) -> np.ndarray:
-        y = np.zeros((x0_dim, self.period))
+        y = np.zeros((x0_dim, self.periods))
         y[:, :x0_time_step] = x0
 
         return y
 
-    def simulate(self, x0: np.ndarray, random_seed: float = 0):
+    def simulate(self, x0: np.ndarray, random_seed: float = 0) -> pd.DataFrame:
         """
 
         x0: np.ndarray (n_dim, ) or (n_dim, t)
@@ -58,7 +58,7 @@ class EulerMaruyama:
 
         for i in range(self.num_sim):
             y = self._set_y_array(x0=x0, x0_dim=x0_dim, x0_time_step=x0_time_step)
-            for t in range(x0_time_step, self.period):
+            for t in range(x0_time_step, self.periods):
                 y_t_1 = y[:, t-1]
                 y_t = y_t_1 + self.drift.get_value(x=y, t=t)*self.delta_t + \
                       (1/2) * np.dot(self.diffusion.get_value(x=y, t=t),
