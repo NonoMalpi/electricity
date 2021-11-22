@@ -34,6 +34,25 @@ class SpatialDriftMultivariate(Coefficient):
         return self.df.lookup(self.df.index, x)
 
 
+class SpatialNearestDriftMultivariate(Coefficient):
+
+    def __init__(self, df: pd.DataFrame):
+        super(SpatialNearestDriftMultivariate, self).__init__(df=df)
+        self._check_dimensions()
+        self._rename_index_names()
+
+    def _get_closest_index(self, x: np.ndarray) -> np.ndarray:
+        diff = np.abs(self.df.columns.values.reshape(-1, 1) - x.reshape(1, -1))
+        closest_index = np.argmin(diff, axis=0)
+        return closest_index
+
+    def get_value(self, x: np.ndarray, t: int) -> np.ndarray:
+        x = x[:, t-1]
+        closest_index = self._get_closest_index(x=x)
+        closest_x = self.df.columns[closest_index]
+        return self.df.lookup(self.df.index, closest_x)
+
+
 class SpatialDifferenceDriftMultivariate(Coefficient):
 
     def __init__(self, df: pd.DataFrame):
