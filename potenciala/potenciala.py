@@ -190,7 +190,8 @@ class VectorTimeSeries(PotencialaBase):
                  x_col_name: str = "x_label",
                  diff_matrix_xi_xj_computation: bool = False,
                  signal_transformation: str = None,
-                 x_transformation: str = None):
+                 x_transformation: str = None,
+                 drift_quantile: List[float] = [0.2, 0.3, 0.4, 0.6, 0.7, 0.8]):
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -202,6 +203,7 @@ class VectorTimeSeries(PotencialaBase):
                          signal_transformation=signal_transformation,
                          x_transformation=x_transformation)
 
+        self.drift_quantile = drift_quantile
         self.df_vector = self._compute_vector_df()
 
         self._compute_drift()
@@ -210,7 +212,9 @@ class VectorTimeSeries(PotencialaBase):
 
         self.samples_hour_x = self._compute_samples_by_hour_x()
         self.drift_hour_x = self._compute_mean_drift_by_hour_x()
-        self.potential_hour_x = self._compute_potential()
+        self.drift_percentile_hour_x = self._compute_percentile_drift_by_hour_x()
+        self.potential_hour_x = self._compute_potential(df=self.drift_hour_x)
+        self.potential_percentile_hour_x = self._compute_potential(df=self.drift_percentile_hour_x)
 
         self.diffusion_matrix = self._compute_diffusion_matrix()
         self.sqrt_diff_matrix = self._compute_sqrt_diffusion_matrix()
@@ -242,18 +246,28 @@ class VectorTimeSeries(PotencialaBase):
     def _compute_samples_by_hour_x(self) -> pd.DataFrame:
         return self._get_group_by_hour_x().count().unstack(-1)
 
+    def _fill_missing_values_drift(self, df: pd.DataFrame) -> pd.DataFrame:
+        min_x = df.columns.min()
+        max_x = df.columns.max()
+        for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(df.columns.tolist())):
+            df[col] = 0
+        df.sort_index(axis=1, inplace=True)
+        return df
+
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
         drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
         # fill missing x values with zero drift
-        min_x = drift_hour_x.columns.min()
-        max_x = drift_hour_x.columns.max()
-        for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(drift_hour_x.columns.tolist())):
-            drift_hour_x[col] = 0
-        drift_hour_x.sort_index(axis=1, inplace=True)
+        drift_hour_x = self._fill_missing_values_drift(df=drift_hour_x)
         return drift_hour_x
 
-    def _compute_potential(self) -> pd.DataFrame:
-        return (-1) * self.drift_hour_x.cumsum(axis=1)
+    def _compute_percentile_drift_by_hour_x(self) -> pd.DataFrame:
+        drift_percentile_hour_x = self._get_group_by_hour_x().quantile(self.drift_quantile).unstack(-2).fillna(0)
+        # fill missing x values with zero drift
+        drift_percentile_hour_x = self._fill_missing_values_drift(df=drift_percentile_hour_x)
+        return drift_percentile_hour_x
+
+    def _compute_potential(self, df: pd.DataFrame) -> pd.DataFrame:
+        return (-1) * df.cumsum(axis=1)
 
     def _compute_diffusion_matrix(self) -> pd.DataFrame:
         return self.df.groupby(["hour"])[self.diffusion_cols].mean()
