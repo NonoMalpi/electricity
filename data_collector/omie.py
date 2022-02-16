@@ -25,7 +25,16 @@ class Omie:
 
     integer_cols = ["year", "month", "day", "hour"]
 
-    marginalpdbc_col_names = integer_cols + ["portugal", "spain"]
+    marginal_price_col_names = integer_cols + ["portugal", "spain"]
+
+    offer_curves_col_names = [
+        "hour", "date", "country", "unit", "offer_type", "energy", "price", "status"
+    ]
+
+    @staticmethod
+    def _parse_floats(df: pd.DataFrame, col_name: AnyStr) -> pd.DataFrame:
+        df[col_name] = df[col_name].str.replace(".", "").str.replace(",", ".").astype(float)
+        return df
 
     @staticmethod
     def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -44,7 +53,7 @@ class Omie:
 
         df = pd.read_csv(
             filepath_or_buffer=filebytes, delimiter=";",
-            skiprows=1, names=Omie.marginalpdbc_col_names, index_col=False
+            skiprows=1, names=Omie.marginal_price_col_names, index_col=False
         )
 
         df.dropna(inplace=True)
