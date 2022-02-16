@@ -52,9 +52,9 @@ class EulerMaruyama:
         for t in range(x0_time_step, self.periods):
             y_t_1 = y[:, t - 1]
             y_t = y_t_1 + self.drift.get_value(x=y, t=t) * self.delta_t + \
-                  (1 / 2) * np.dot(self.diffusion.get_value(x=y, t=t),
-                                   np.random.normal(loc=self.nu, scale=self.sqrt_delta_t, size=(x0_dim, 1))
-                                   ).reshape(-1)
+                np.dot(self.diffusion.get_value(x=y, t=t),
+                       np.random.normal(loc=self.nu, scale=self.sqrt_delta_t, size=(x0_dim, 1))
+                ).reshape(-1)
             y_t = np.where(y_t < 0, 0, y_t)
             y[:, t] = y_t
         return y.flatten("F")
