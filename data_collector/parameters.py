@@ -1,21 +1,64 @@
+from abc import ABCMeta, abstractmethod
 
-class MarginalPriceParams:
-    RAW_FILE_NAME = "marginalpdbc"
-    SKIP_ROWS = 1
-    COL_NAMES = ["year", "month", "day", "hour", "portugal", "spain"]
+from typing import AnyStr, List
 
 
-class OfferCurvesParams:
-    RAW_FILE_NAME = "curva_pbc_uof"
-    SKIP_ROWS = 3
-    COL_NAMES = [
-        "hour", "date", "country", "unit", "offer_type", "energy", "price", "status"
-    ]
+class OmieParameter(metaclass=ABCMeta):
+    def __init__(self):
+        pass
+
+    @property
+    @abstractmethod
+    def raw_file_name(self) -> AnyStr:
+        pass
+
+    @property
+    @abstractmethod
+    def skip_rows(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def integer_cols(self) -> List[AnyStr]:
+        pass
+
+    @property
+    @abstractmethod
+    def float_cols(self) -> List[AnyStr]:
+        pass
+
+    @property
+    @abstractmethod
+    def col_names(self) -> List[AnyStr]:
+        pass
+
+    @property
+    @abstractmethod
+    def date_format(self) -> AnyStr:
+        pass
+
+
+class MarginalPriceParams(OmieParameter):
+    raw_file_name = "marginalpdbc"
+    skip_rows = 1
+    integer_cols = ["year", "month", "day", "hour"]
+    float_cols = []
+    col_names = integer_cols + ["portugal", "spain"]
+    date_format = "%Y-%m-%d"
+
+
+class OfferCurvesParams(OmieParameter):
+    raw_file_name = "curva_pbc"#_uof"
+    skip_rows = 3
+    integer_cols = ["hour"]
+    float_cols = ["energy", "price"]
+    col_names = integer_cols + ["date", "country", "unit", "offer_type"] + float_cols + ["status"]
+    date_format = "%d/%m/%Y"
 
     class OfferType:
-        BID = "C"
-        ASK = "V"
+        bid = "C"
+        ask = "V"
 
     class OfferStatus:
-        OFFERED = "O"
-        CLEARED = "C"
+        offered = "O"
+        cleared = "C"

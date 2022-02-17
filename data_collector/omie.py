@@ -12,53 +12,54 @@ import pandas as pd
 
 from joblib import Parallel, delayed
 
+from data_collector.parameters import OmieParameter, MarginalPriceParams, OfferCurvesParams
+
 logger = logging.getLogger()
 logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s", level=logging.INFO)
 
 
 class Omie:
-
     url_pattern = "https://www.omie.es/es/file-download?parents%5B0%5D" + \
                   "={family_file}&filename={filename}"
 
     date_file_pattern = "{filename}_{date_str}"
 
-    integer_cols = ["year", "month", "day", "hour"]
-
-    marginal_price_col_names = integer_cols + ["portugal", "spain"]
-
-    offer_curves_col_names = [
-        "hour", "date", "country", "unit", "offer_type", "energy", "price", "status"
-    ]
-
     @staticmethod
-    def _parse_floats(df: pd.DataFrame, col_name: AnyStr) -> pd.DataFrame:
-        df[col_name] = df[col_name].str.replace(".", "").str.replace(",", ".").astype(float)
-        return df
+    def _clean_df(df: pd.DataFrame, omie_parameter: OmieParameter) -> pd.DataFrame:
 
-    @staticmethod
-    def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
-        for col in Omie.integer_cols:
+        # remove rows without hour
+        df = df[~df["hour"].isnull()]
+
+        for col in omie_parameter.integer_cols:
             df[col] = df[col].astype(int)
 
-        df["date"] = pd.to_datetime(
-            df["year"].astype(str) + "-" + df["month"].astype(str) + "-" + df["day"].astype(str),
-            format="%Y-%m-%d"
-        )
+        for col in omie_parameter.float_cols:
+            df[col] = df[col].str.replace(".", "").str.replace(",", ".").astype(float)
+
+        if omie_parameter == MarginalPriceParams:
+            df["date"] = pd.to_datetime(
+                df["year"].astype(str) + "-" + df["month"].astype(str) + "-" + df["day"].astype(str),
+                format="%Y-%m-%d"
+            )
+
+        elif omie_parameter == OfferCurvesParams:
+            df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y")
 
         return df
 
     @staticmethod
-    def _create_df_from_bytes(filebytes: bytes) -> pd.DataFrame:
+    def _create_df_from_bytes(filebytes: bytes, omie_parameter: OmieParameter) -> pd.DataFrame:
 
         df = pd.read_csv(
-            filepath_or_buffer=filebytes, delimiter=";",
-            skiprows=1, names=Omie.marginal_price_col_names, index_col=False
+            filepath_or_buffer=filebytes,
+            delimiter=";",
+            skiprows=omie_parameter.skip_rows,
+            names=omie_parameter.col_names,
+            index_col=False,
+            encoding="latin-1"
         )
 
-        df.dropna(inplace=True)
-
-        df = Omie._clean_df(df)
+        df = Omie._clean_df(df=df, omie_parameter=omie_parameter)
 
         return df
 
@@ -133,12 +134,12 @@ class Omie:
         return year_df
 
     @staticmethod
-    def download_date_file(filename: AnyStr, date: AnyStr) -> pd.DataFrame:
+    def download_date_file(omie_parameter: OmieParameter, date: AnyStr) -> pd.DataFrame:
 
         date = pd.to_datetime(date).strftime("%Y%m%d")
-        filename_date = f"{filename}_{date}.1"
-        file_content = Omie._download_content(family_file=filename, filename=filename_date)
-        date_df = Omie._create_df_from_bytes(filebytes=BytesIO(file_content))
+        filename_date = f"{omie_parameter.raw_file_name}_{date}.1"
+        file_content = Omie._download_content(family_file=omie_parameter.raw_file_name, filename=filename_date)
+        date_df = Omie._create_df_from_bytes(filebytes=BytesIO(file_content), omie_parameter=omie_parameter)
 
         return date_df
 
