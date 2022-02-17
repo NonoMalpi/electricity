@@ -1,8 +1,10 @@
+google-cloud-bigquery==2.33.0
 joblib==1.0.0
 jupyter==1.0.0
 matplotlib==3.3.4
 numba==0.54.1
 pandas==1.2.0
+pyarrow==6.0.1
 requests==2.25.0
 seaborn==0.11.2
 scipy==1.6.0
