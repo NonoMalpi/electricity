@@ -209,7 +209,7 @@ class Omie:
         df: pd.DataFrame
             The dataframe with the processed and cleaned file.
         """
-
+        #TODO: Possible refactor to include this logic in OmiePeriod. _parse_unzip_file should be also modified
         if omie_parameter.zip_period == Period.Year:
             period = OmiePeriod(period=omie_parameter.zip_period, year=year)
             unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, date_str=period.date_str)
@@ -282,6 +282,7 @@ class Omie:
 
         years = range(start_year, end_year)
 
+        #TODO: consider timer decorator
         start = time.time()
 
         df_list = Parallel(n_jobs=-1)(
@@ -359,6 +360,65 @@ class Omie:
         )
         if job.errors:
             logging.error(job.errors)
+
+    @staticmethod
+    def upload_bq_period_file(omie_parameter: OmieParameter,
+                              start_year: int,
+                              end_year: int,
+                              job_config: bigquery.job.LoadJobConfig) -> NoReturn:
+        """ Upload to BigQuery a plain file for a given period from Omie website.
+
+        Params
+        ------
+        omie_parameter: OmieParamter
+            The configuration parameters of the type of file to obtain.
+
+        start_year: int
+            The starting year of the period.
+
+        end_year: int
+            The ending year of the period.
+
+        job_config: bigquery.job.LoadJobConfig
+            The BigQuery job configuration
+
+        Return
+        ------
+        df: pd.DataFrame
+            The dataframe with the processed and cleaned file.
+        """
+
+        assert start_year >= 2016, "Minimum year stored in Omie is 2016."
+
+        current_year_download = False
+
+        if end_year < datetime.date.today().year:
+            end_year += 1
+        elif end_year >= datetime.date.today().year:
+            current_year_download = True
+            end_year = datetime.date.today().year
+
+        years = range(start_year, end_year)
+
+        # TODO: consider timer decorator
+        start = time.time()
+
+        logging.info("Uploading previous years ...")
+        _ = Parallel(n_jobs=-1)(
+            delayed(Omie.upload_bq_year_file)(omie_parameter=omie_parameter, year=year, job_config=job_config)
+            for year in years
+        )
+
+        if current_year_download:
+            logging.info("Uploading current year ...")
+            dates = pd.date_range(start=f"{end_year}-01-01", end=datetime.date.today(), freq="D")
+            _ = Parallel(n_jobs=-1)(
+                delayed(Omie.upload_bq_date_file)(omie_parameter=omie_parameter, date=date, job_config=job_config)
+                for date in dates
+            )
+
+        end = time.time()
+        logging.info(f"Time processing: {end - start}")
 
     # endregion
     @staticmethod
