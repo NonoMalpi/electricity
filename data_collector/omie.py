@@ -13,10 +13,34 @@ import pandas as pd
 from google.cloud import bigquery
 from joblib import Parallel, delayed
 
-from data_collector.parameters import OmieParameter, MarginalPriceParams, OfferCurvesParams
+from data_collector.parameters import OmieParameter, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams, Period
 
 logger = logging.getLogger()
 logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s", level=logging.INFO)
+
+
+class OmiePeriod:
+    def __init__(self, period: Period, year: int, month: int = None):
+        self.period = period
+        self.year = year
+        self.month = month
+        self.date_range = self._generate_date_range()
+        self.date_str = self._generate_date_str()
+
+    def _generate_date_range(self):
+
+        if self.period == Period.Year:
+            return pd.date_range(start=f"{self.year}", end=f"{self.year+1}", freq="D", inclusive="left")
+        elif self.period == Period.YearMonth:
+            month_limits = pd.date_range(start=f"{self.year}-{self.month}", freq="MS", periods=2)
+            return pd.date_range(start=month_limits[0], end=month_limits[1], freq="D", inclusive="left")
+
+    def _generate_date_str(self):
+
+        if self.period == Period.Year:
+            return f"{self.year}"
+        elif self.period == Period.YearMonth:
+            return f"{self.year}{self.month:02d}"
 
 
 class Omie:
@@ -46,7 +70,7 @@ class Omie:
                 format="%Y-%m-%d"
             )
 
-        elif omie_parameter == OfferCurvesParams:
+        elif omie_parameter in [OfferCurvesParams, OfferCurvesUnitsParams]:
             df["date"] = pd.to_datetime(df["date"], format="%d/%m/%Y")
 
         return df
@@ -95,23 +119,19 @@ class Omie:
             logging.warning(msg=f"The {file_pattern} was not found in zip")
 
     @staticmethod
-    def _check_zip_dates(unzip_file: ZipFile, year: int) -> pd.DatetimeIndex:
+    def _check_zip_dates(unzip_file: ZipFile, period: OmiePeriod) -> NoReturn:
 
-        dates = pd.date_range(start=f"{year}-01-01", end=f"{year}-12-31", freq="D")
-
-        assert len(dates) <= len(unzip_file.namelist()), \
-            f"Zip file for year {year} does not contain all dates. " \
+        assert len(period.date_range) <= len(unzip_file.namelist()), \
+            f"Zip file for period {period.date_range} does not contain all dates. " \
             f"There are {len(unzip_file.namelist())} dates."
 
-        return dates
-
     @staticmethod
-    def _parse_unzip_file(unzip_file: ZipFile, omie_parameter: OmieParameter, year: int) -> pd.DataFrame:
+    def _parse_unzip_file(unzip_file: ZipFile, omie_parameter: OmieParameter, period: OmiePeriod) -> pd.DataFrame:
 
-        dates = Omie._check_zip_dates(unzip_file=unzip_file, year=year)
+        Omie._check_zip_dates(unzip_file=unzip_file, period=period)
 
         df_list = []
-        for i, date in enumerate(dates):
+        for i, date in enumerate(period.date_range):
             if i % 30 == 0:
                 logging.info(f"Processing date {date} ...")
             df_list.append(
@@ -123,25 +143,27 @@ class Omie:
     @staticmethod
     def _upload_unzip_file(unzip_file: ZipFile,
                            omie_parameter: OmieParameter,
-                           year: int,
+                           period: OmiePeriod,
                            job_config: bigquery.job.LoadJobConfig) -> NoReturn:
 
-        dates = Omie._check_zip_dates(unzip_file=unzip_file, year=year)
+        Omie._check_zip_dates(unzip_file=unzip_file, period=period)
 
         df_list = []
-        for i, date in enumerate(dates):
+        for i, date in enumerate(period.date_range):
             df_list.append(
                 Omie._read_date_bytes_to_df(unzip_file=unzip_file, omie_parameter=omie_parameter, date=date)
             )
-            if (i % 100 == 0 and i > 0) or i == len(dates) - 1:
+            if (i % 100 == 0 and i > 0) or i == len(period.date_range) - 1:
                 logging.info(f"Uploading batch until date {date.strftime('%Y-%m-%d')} to BigQuery ...")
                 df = pd.concat(df_list)
-                Omie.gcloud_client.load_table_from_dataframe(
+                job = Omie.gcloud_client.load_table_from_dataframe(
                     dataframe=df,
                     destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
                     location="EU",
                     job_config=job_config
                 )
+                if job.errors:
+                    logging.error(job.errors)
                 df_list = []
 
     @staticmethod
@@ -161,16 +183,15 @@ class Omie:
         return response.content
 
     @staticmethod
-    def _request_and_decompress_zip(omie_parameter: OmieParameter, year: int) -> ZipFile:
+    def _request_and_decompress_zip(omie_parameter: OmieParameter, date_str: AnyStr) -> ZipFile:
 
-        filename_year_zip = Omie.date_file_pattern.format(filename=omie_parameter.raw_file_name, date_str=year) + ".zip"
+        filename_year_zip = Omie.date_file_pattern.format(filename=omie_parameter.raw_file_name, date_str=date_str) + ".zip"
         zip_content = Omie._request_content(family_file=omie_parameter.raw_file_name, filename=filename_year_zip)
         unzip_content = Omie._decompress_zip(zip_content=zip_content)
 
         return unzip_content
 
-
-    #region download
+    # region download
     @staticmethod
     def download_year_file(omie_parameter: OmieParameter, year: int) -> pd.DataFrame:
         """ Download a batch of compressed files for a year from Omie website and process them as a dataframe.
@@ -188,9 +209,18 @@ class Omie:
         df: pd.DataFrame
             The dataframe with the processed and cleaned file.
         """
-        #TODO: Change year for period because some zip comes as YYYYMM
-        unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, year=year)
-        year_df = Omie._parse_unzip_file(unzip_file=unzip_content, omie_parameter=omie_parameter, year=year)
+
+        if omie_parameter.zip_period == Period.Year:
+            period = OmiePeriod(period=omie_parameter.zip_period, year=year)
+            unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, date_str=period.date_str)
+            year_df = Omie._parse_unzip_file(unzip_file=unzip_content, omie_parameter=omie_parameter, period=period)
+
+        elif omie_parameter.zip_period == Period.YearMonth:
+            year_df = []
+            for i in range(1, 13):
+                period = OmiePeriod(period=omie_parameter.zip_period, year=year, month=i)
+                unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, date_str=period.date_str)
+                year_df += Omie._parse_unzip_file(unzip_file=unzip_content, omie_parameter=omie_parameter, period=period)
 
         return year_df
 
@@ -272,7 +302,38 @@ class Omie:
         logging.info(f"Time processing: {end-start}")
 
         return df
-    #endregion
+    # endregion
+
+    # region uploadBQ
+    @staticmethod
+    def upload_bq_year_file(omie_parameter: OmieParameter, year: int, job_config: bigquery.job.LoadJobConfig) -> NoReturn:
+        """ Upload to BigQuery a plain file for a given year from Omie website.
+
+        Params
+        ------
+        omie_parameter: OmieParamter
+            The configuration parameters of the type of file to obtain.
+
+        year: int
+            The year to download.
+
+        job_config: bigquery.job.LoadJobConfig
+            The BigQuery job configuration
+        """
+        if omie_parameter.zip_period == Period.Year:
+            period = OmiePeriod(period=omie_parameter.zip_period, year=year)
+            unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, date_str=period.date_str)
+            Omie._upload_unzip_file(
+                unzip_file=unzip_content, omie_parameter=omie_parameter, period=period, job_config=job_config
+            )
+
+        elif omie_parameter.zip_period == Period.YearMonth:
+            for i in range(1, 13):
+                period = OmiePeriod(period=omie_parameter.zip_period, year=year, month=i)
+                unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, date_str=period.date_str)
+                Omie._upload_unzip_file(
+                    unzip_file=unzip_content, omie_parameter=omie_parameter, period=period, job_config=job_config
+                )
 
     @staticmethod
     def upload_bq_date_file(omie_parameter: OmieParameter, date: AnyStr, job_config: bigquery.job.LoadJobConfig) -> NoReturn:
@@ -290,33 +351,16 @@ class Omie:
             The BigQuery job configuration
         """
         df = Omie.download_date_file(omie_parameter=omie_parameter, date=date)
-        Omie.gcloud_client.load_table_from_dataframe(
+        job = Omie.gcloud_client.load_table_from_dataframe(
             dataframe=df,
             destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
             location="EU",
             job_config=job_config
         )
+        if job.errors:
+            logging.error(job.errors)
 
-    @staticmethod
-    def upload_bq_year_file(omie_parameter: OmieParameter, year: int, job_config: bigquery.job.LoadJobConfig) -> NoReturn:
-        """ Upload to BigQuery a plain file for a given year from Omie website.
-
-        Params
-        ------
-        omie_parameter: OmieParamter
-            The configuration parameters of the type of file to obtain.
-
-        year: int
-            The year to download.
-
-        job_config: bigquery.job.LoadJobConfig
-            The BigQuery job configuration
-        """
-        unzip_content = Omie._request_and_decompress_zip(omie_parameter=omie_parameter, year=year)
-        Omie._upload_unzip_file(
-            unzip_file=unzip_content, omie_parameter=omie_parameter, year=year, job_config=job_config
-        )
-
+    # endregion
     @staticmethod
     def include_old_file(df: pd.DataFrame, filename: str, omie_parameter: OmieParameter) -> pd.DataFrame:
 

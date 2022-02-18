@@ -1,6 +1,12 @@
 from abc import ABCMeta, abstractmethod
+from enum import Enum
 
 from typing import AnyStr, List
+
+
+class Period(Enum):
+    Year = "year"
+    YearMonth = "year_month"
 
 
 class OmieParameter(metaclass=ABCMeta):
@@ -39,6 +45,11 @@ class OmieParameter(metaclass=ABCMeta):
 
     @property
     @abstractmethod
+    def zip_period(self) -> Period:
+        pass
+
+    @property
+    @abstractmethod
     def bq_table(self) -> AnyStr:
         pass
 
@@ -50,6 +61,7 @@ class MarginalPriceParams(OmieParameter):
     float_cols = []
     col_names = integer_cols + ["portugal", "spain"]
     date_format = "%Y-%m-%d"
+    zip_period = Period.Year
     bq_table = "marginal_prices"
 
 
@@ -60,6 +72,7 @@ class OfferCurvesParams(OmieParameter):
     float_cols = ["energy", "price"]
     col_names = integer_cols + ["date", "country", "unit", "offer_type"] + float_cols + ["status"]
     date_format = "%d/%m/%Y"
+    zip_period = Period.Year
     bq_table = "offer_curves"
 
     class OfferType:
@@ -73,4 +86,5 @@ class OfferCurvesParams(OmieParameter):
 
 class OfferCurvesUnitsParams(OfferCurvesParams):
     raw_file_name = "curva_pbc_uof"
+    zip_period = Period.YearMonth
     bq_table = "offer_curves_units"
