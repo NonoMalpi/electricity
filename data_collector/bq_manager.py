@@ -2,6 +2,7 @@ import logging
 
 from typing import AnyStr, NoReturn, Union
 
+import pandas as pd
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
@@ -58,3 +59,22 @@ class BQManager:
             if query_job.errors:
                 logging.error(query_job.errors)
                 raise Exception(f"[!!] Error creating table {job_config.destination}")
+
+    def download_query_to_df(self, query: AnyStr) -> pd.DataFrame:
+        """ Download a query result into a dataframe
+
+        Params
+        ------
+        query: str
+            The query string to download.
+
+        Returns
+        -------
+        df: pd.Dataframe
+            The dataframe containing the query result.
+        """
+
+        df = self.client.query(
+            query=query, location=GCP.BigQuery.LOCATION
+        ).result().to_dataframe(create_bqstorage_client=True, progress_bar_type='tqdm_notebook')
+        return df
