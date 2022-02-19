@@ -33,6 +33,9 @@ class BQManager:
         ------
         curve_parameter: Union[OfferCurvesParams, OfferCurvesUnitsParams]
             The configuration parameters of the Omie curve type.
+
+        offer_status: Union[None, OfferCurvesParams.OfferStatus]
+            Filter offer curves status by this parameter, default = None.
         """
 
         table_id = f"{GCP.PROJECT_ID}.{self.omie_dataset}.{curve_parameter.bq_table}"
