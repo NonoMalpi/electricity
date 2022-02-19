@@ -1,2 +1,3 @@
+from .bq_manager import BQManager
 from .omie import Omie
-from .parameters import MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams
+from .parameters import GCP, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams

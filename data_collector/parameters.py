@@ -9,6 +9,19 @@ class Period(Enum):
     YearMonth = "year_month"
 
 
+class GCP:
+    PROJECT_ID = "electricity-imperial"
+
+    class BigQuery:
+        LOCATION = "EU"
+
+        class Omie:
+            DATASET_ID = "omie"
+            MARGINAL_PRICES_TABLE_ID = "marginal_prices"
+            OFFER_CURVES_TABLE_ID = "offer_curves"
+            OFFER_CURVES_UNITS_TABLE_ID= "offer_curves_units"
+
+
 class OmieParameter(metaclass=ABCMeta):
     def __init__(self):
         pass
@@ -75,11 +88,11 @@ class OfferCurvesParams(OmieParameter):
     zip_period = Period.Year
     bq_table = "offer_curves"
 
-    class OfferType:
+    class OfferType(Enum):
         bid = "C"
         ask = "V"
 
-    class OfferStatus:
+    class OfferStatus(Enum):
         offered = "O"
         cleared = "C"
 

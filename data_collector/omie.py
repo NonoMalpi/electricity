@@ -15,7 +15,9 @@ from google.cloud import bigquery
 from joblib import Parallel, delayed
 from retry import retry
 
-from data_collector.parameters import OmieParameter, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams, Period
+from data_collector.parameters import (
+    GCP, OmieParameter, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams, Period
+)
 
 warnings.filterwarnings("ignore")
 
@@ -52,9 +54,7 @@ class Omie:
 
     date_file_pattern = "{filename}_{date_str}"
 
-    #gcloud_client = bigquery.Client(project="electricity-imperial")
-
-    bq_dataset = "omie"
+    bq_dataset = GCP.BigQuery.Omie.DATASET_ID
 
     @staticmethod
     def _clean_df(df: pd.DataFrame, omie_parameter: OmieParameter) -> pd.DataFrame:
@@ -146,16 +146,15 @@ class Omie:
 
     @staticmethod
     @retry(Exception, delay=5, tries=5, jitter=(1, 4), max_delay=10)
-    #TODO: BigQuery does not finish, try to init client in each call
     def _run_job_upload_df(df: pd.DataFrame,
                            date: pd.DatetimeIndex,
                            omie_parameter: OmieParameter,
                            job_config: bigquery.job.LoadJobConfig) -> NoReturn:
-        gcloud_client = bigquery.Client(project="electricity-imperial")
+        gcloud_client = bigquery.Client(project=GCP.PROJECT_ID)
         job = gcloud_client.load_table_from_dataframe(
             dataframe=df,
-            destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
-            location="EU",
+            destination=f"{Omie.bq_dataset}.{omie_parameter.bq_table}",
+            location=GCP.BigQuery.LOCATION,
             job_config=job_config
         )
         if job.errors:
