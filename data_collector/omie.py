@@ -1,6 +1,7 @@
 import datetime
 import logging
 import time
+import warnings
 
 from io import BytesIO
 from typing import AnyStr, NoReturn
@@ -12,8 +13,11 @@ import pandas as pd
 
 from google.cloud import bigquery
 from joblib import Parallel, delayed
+from retry import retry
 
 from data_collector.parameters import OmieParameter, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams, Period
+
+warnings.filterwarnings("ignore")
 
 logger = logging.getLogger()
 logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s", level=logging.INFO)
@@ -48,7 +52,7 @@ class Omie:
 
     date_file_pattern = "{filename}_{date_str}"
 
-    gcloud_client = bigquery.Client(project="electricity-imperial")
+    #gcloud_client = bigquery.Client(project="electricity-imperial")
 
     bq_dataset = "omie"
 
@@ -141,6 +145,24 @@ class Omie:
         return pd.concat(df_list)
 
     @staticmethod
+    @retry(Exception, delay=5, tries=5, jitter=(1, 4), max_delay=10)
+    #TODO: BigQuery does not finish, try to init client in each call
+    def _run_job_upload_df(df: pd.DataFrame,
+                           date: pd.DatetimeIndex,
+                           omie_parameter: OmieParameter,
+                           job_config: bigquery.job.LoadJobConfig) -> NoReturn:
+        gcloud_client = bigquery.Client(project="electricity-imperial")
+        job = gcloud_client.load_table_from_dataframe(
+            dataframe=df,
+            destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
+            location="EU",
+            job_config=job_config
+        )
+        if job.errors:
+            logging.error(job.errors)
+            raise Exception(f"[!!] Error uploading file for date {date}")
+
+    @staticmethod
     def _upload_unzip_file(unzip_file: ZipFile,
                            omie_parameter: OmieParameter,
                            period: OmiePeriod,
@@ -156,14 +178,7 @@ class Omie:
             if (i % 100 == 0 and i > 0) or i == len(period.date_range) - 1:
                 logging.info(f"Uploading batch until date {date.strftime('%Y-%m-%d')} to BigQuery ...")
                 df = pd.concat(df_list)
-                job = Omie.gcloud_client.load_table_from_dataframe(
-                    dataframe=df,
-                    destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
-                    location="EU",
-                    job_config=job_config
-                )
-                if job.errors:
-                    logging.error(job.errors)
+                Omie._run_job_upload_df(df=df, date=date, omie_parameter=omie_parameter, job_config=job_config)
                 df_list = []
 
     @staticmethod
@@ -352,14 +367,7 @@ class Omie:
             The BigQuery job configuration
         """
         df = Omie.download_date_file(omie_parameter=omie_parameter, date=date)
-        job = Omie.gcloud_client.load_table_from_dataframe(
-            dataframe=df,
-            destination=f"{Omie.bq_dataset}.{omie_parameter.raw_file_name}",
-            location="EU",
-            job_config=job_config
-        )
-        if job.errors:
-            logging.error(job.errors)
+        Omie._run_job_upload_df(df=df, date=date, omie_parameter=omie_parameter, job_config=job_config)
 
     @staticmethod
     def upload_bq_period_file(omie_parameter: OmieParameter,
