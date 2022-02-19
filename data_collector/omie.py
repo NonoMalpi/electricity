@@ -4,7 +4,7 @@ import time
 import warnings
 
 from io import BytesIO
-from typing import AnyStr, NoReturn
+from typing import AnyStr, Iterable, NoReturn, Tuple
 from zipfile import ZipFile
 
 import requests
@@ -190,7 +190,7 @@ class Omie:
         return unzip_file
 
     @staticmethod
-    def _request_content(family_file: AnyStr, filename: AnyStr):
+    def _request_content(family_file: AnyStr, filename: AnyStr) -> requests.Response.content:
 
         url = Omie.url_pattern.format(family_file=family_file, filename=filename)
         response = requests.get(url)
@@ -205,6 +205,23 @@ class Omie:
         unzip_content = Omie._decompress_zip(zip_content=zip_content)
 
         return unzip_content
+
+    @staticmethod
+    def _check_years_logic(start_year: int, end_year: int) -> Tuple[Iterable[int], bool]:
+
+        assert start_year >= 2016, "Minimum year stored in Omie is 2016."
+
+        current_year_download = False
+
+        if end_year < datetime.date.today().year:
+            end_year += 1
+        elif end_year >= datetime.date.today().year:
+            current_year_download = True
+            end_year = datetime.date.today().year
+
+        years = range(start_year, end_year)
+
+        return years, current_year_download
 
     # region download
     @staticmethod
@@ -285,17 +302,7 @@ class Omie:
             The dataframe with the processed and cleaned file.
         """
 
-        assert start_year >= 2016, "Minimum year stored in Omie is 2016."
-
-        current_year_download = False
-
-        if end_year < datetime.date.today().year:
-            end_year += 1
-        elif end_year >= datetime.date.today().year:
-            current_year_download = True
-            end_year = datetime.date.today().year
-
-        years = range(start_year, end_year)
+        years, current_year_download = Omie._check_years_logic(start_year=start_year, end_year=end_year)
 
         #TODO: consider timer decorator
         start = time.time()
@@ -396,17 +403,7 @@ class Omie:
             The dataframe with the processed and cleaned file.
         """
 
-        assert start_year >= 2016, "Minimum year stored in Omie is 2016."
-
-        current_year_download = False
-
-        if end_year < datetime.date.today().year:
-            end_year += 1
-        elif end_year >= datetime.date.today().year:
-            current_year_download = True
-            end_year = datetime.date.today().year
-
-        years = range(start_year, end_year)
+        years, current_year_download = Omie._check_years_logic(start_year=start_year, end_year=end_year)
 
         # TODO: consider timer decorator
         start = time.time()
@@ -427,8 +424,8 @@ class Omie:
 
         end = time.time()
         logging.info(f"Time processing: {end - start}")
-
     # endregion
+
     @staticmethod
     def include_old_file(df: pd.DataFrame, filename: str, omie_parameter: OmieParameter) -> pd.DataFrame:
 
