@@ -9,7 +9,7 @@ df = pd.DataFrame()
 
 
 class OfferCurves:
-    """ Class that generate historic ask/bid curves and cleared price for an hour from an input dataframe.
+    """ Class that generate historical ask/bid curves and cleared price for an hour from an input dataframe.
 
     Parameters
     ---------
