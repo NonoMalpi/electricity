@@ -308,9 +308,6 @@ class SingleTimeSeries(PotencialaBase):
 
         x_transformation: str
             Name of the Transformer to apply to the independent variable, default = None.
-
-
-
         """
 
         super().__init__(df=df,
@@ -390,18 +387,97 @@ class SingleTimeSeries(PotencialaBase):
 
 
 class VectorTimeSeries(PotencialaBase):
+    """ Compute several statistic of a multivariate electricity price time series.
+
+    This class transforms a univariate price time series into a multidimensional time series,
+    where each dimension corresponds to one hour. Then, it computes the daily drift (related to first moment),
+    daily diffusion matrix (related to second moment) and daily potential (integral of the drift).
+
+    Attributes
+    ----------
+    drift_quantile: List[float]
+        List of quantiles values for drift representation.
+
+    df_vector: pd.DataFrame
+        A dataframe containing the multivariate electricity price time series, index: hour, columns: dates.
+
+    diffusion_cols: List[str]
+        List of diffusion column names.
+
+    x_two_col_names: List[str]
+        List of auxiliary column names for the independent variable at hour i.
+
+    samples_hour_x: pd.DataFrame
+        A dataframe containing the number of samples per hour and independent variable values.
+
+    drift_hour_x: pd.DataFrame
+        A dataframe containing the mean of the daily drift per hour and independent variable values.
+
+    drift_percentile_hour_x: pd.DataFrame
+        A dataframe containing the percentiles of the daily drift per hour and independent variable values.
+
+    potential_hour_x: pd.DataFrame
+        A dataframe containing the integral of the mean daily drift per hour and independent variable values.
+
+    potential_percentile_hour_x: pd.DataFrame
+        A dataframe containing the integral of the percentile daily drift per hour and independent variable values.
+
+    diffusion_matrix: pd.DataFrame
+        A dataframe containing the mean diffusion value per hour i and hour j.
+
+    sqrt_diff_matrix: np.ndarray
+        The (hour i x hour j) array containing the squared root matrix of the diffusion_matrix attribute.
+
+    diff_xi_xj: np.ndarray
+        A (hour i x hour j) array, where each (hour i, hour j) is a matrix containing the mean diffusion by
+        independent value in hour i and independent value in hour j.
+    """
 
     def __init__(self,
                  df: pd.DataFrame,
                  signal_name: str,
-                 bucket_method=BucketMethod.Cut,
-                 bin_size=2,
+                 bucket_method: BucketMethod = BucketMethod.Cut,
+                 bin_size: int = 2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
                  diff_matrix_xi_xj_computation: bool = False,
                  signal_transformation: str = None,
                  x_transformation: str = None,
                  drift_quantile: List[float] = [0.2, 0.3, 0.4, 0.6, 0.7, 0.8]):
+        """ Initialisation of the class.
+
+        Parameters
+        ----------
+         df: pd.DataFrame
+            The raw dataframe containing electricity time series information.
+
+        signal_name: str
+            The raw name of the signal to study.
+
+        bucket_method: BucketMethod
+            Method to discretise the independent variable, default = BucketMethod.Cut.
+
+        bin_size: int
+            Length between marks for the BucketMethod.Cut, default = 2.
+
+        time_change: bool
+            Amend the clock change issue for the time series, default = True.
+
+        x_col_name: str
+            Name of the independent variable, default = "x_label".
+
+        diff_matrix_xi_xj_computation: bool
+            Flag to indicate whether computing diff_xi_xj attribute, default = False.
+
+        signal_transformation: str
+            Name of the Transformer to apply to the signal, default = None.
+
+        x_transformation: str
+            Name of the Transformer to apply to the independent variable, default = None.
+
+        drift_quantile: List[float]
+            List of quantiles values for drift representation.
+        """
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -433,11 +509,19 @@ class VectorTimeSeries(PotencialaBase):
             self.diff_xi_xj = self._compute_diff_matrix_components()
 
     def _compute_vector_df(self) -> pd.DataFrame:
+        """ Transform hourly univariate signal into multivariate daily signal.
+
+        Returns
+        -------
+        df_vector: pd.DataFrame
+            A dataframe containing the multivariate daily price signal.
+        """
         df_vector = self.df.pivot(values=self.signal_name, index=["hour"], columns=["date"])
         df_vector.sort_index(axis=1, inplace=True)
         return df_vector
 
     def _compute_diffusion(self) -> NoReturn:
+        """ Compute the diffusion terms for hour i and hour j based on the daily drift. """
         df_date_hour_drift = self.df.pivot(values=self.drift_cols[0], index=["date"], columns=["hour"])
         self.diffusion_cols = [f"diffusion_h_{i}" for i in df_date_hour_drift.columns]
         df_date_hour_drift.columns = self.diffusion_cols
@@ -445,6 +529,7 @@ class VectorTimeSeries(PotencialaBase):
         self.df[self.diffusion_cols] = self.df[self.diffusion_cols].multiply(self.df[self.drift_cols[0]], axis="index")
 
     def _add_x_two_label(self) -> NoReturn:
+        """ Add auxiliary columns for the value of the independent variable at hour j for the row with hour i"""
         df_date_hour_x = self.df.pivot(values=self.x_col_name, index=["date"], columns=["hour"])
         self.x_two_col_names = [f"{self.x_col_name}_2_h_{i}" for i in df_date_hour_x.columns]
         df_date_hour_x.columns = self.x_two_col_names
@@ -454,9 +539,27 @@ class VectorTimeSeries(PotencialaBase):
         return self.df.groupby(["hour", self.x_col_name])[self.drift_cols[0]]
 
     def _compute_samples_by_hour_x(self) -> pd.DataFrame:
+        """ Calculate the number of samples per hour and independent variable value.
+
+        Returns
+        -------
+        A dataframe with the number of samples per hour and independent variable value.
+        """
         return self._get_group_by_hour_x().count().unstack(-1)
 
     def _fill_missing_values_drift(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ Fill with zero values those columns that have not appeared in the hour - independent variable value.
+
+        Parameters
+        ----------
+        df: pd.DataFrame
+            A dataframe to fill with zeros.
+
+        Returns
+        -------
+        df: pd.DataFrame
+            A dataframe with zeros in the missing columns.
+        """
         min_x = df.columns.min()
         max_x = df.columns.max()
         for col in list(set(np.arange(min_x, max_x, self.bin_size, dtype="float64")) - set(df.columns.tolist())):
@@ -465,27 +568,79 @@ class VectorTimeSeries(PotencialaBase):
         return df
 
     def _compute_mean_drift_by_hour_x(self) -> pd.DataFrame:
+        """ Calculate the mean daily drift per hour and independent variable value.
+
+        Returns
+        -------
+        drift_hour_x: pd.DataFrame
+            A dataframe with the mean daily drift per hour and independent variable value.
+        """
         drift_hour_x = self._get_group_by_hour_x().mean().unstack(-1).fillna(0)
         # fill missing x values with zero drift
         drift_hour_x = self._fill_missing_values_drift(df=drift_hour_x)
         return drift_hour_x
 
     def _compute_percentile_drift_by_hour_x(self) -> pd.DataFrame:
+        """ Calculate the percentile of the daily drift per hour and independent variable value.
+
+        Returns
+        -------
+        drift_percentile_hour_x: pd.DataFrame
+            A dataframe with the percentile of the daily drift per hour and independent variable value.
+        """
         drift_percentile_hour_x = self._get_group_by_hour_x().quantile(self.drift_quantile).unstack(-2).fillna(0)
         # fill missing x values with zero drift
         drift_percentile_hour_x = self._fill_missing_values_drift(df=drift_percentile_hour_x)
         return drift_percentile_hour_x
 
     def _compute_potential(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ Compute the integral of the drift values.
+
+        Parameters
+        ----------
+        df: pd.DataFrame
+            A dataframe with the daily drift values.
+
+        Returns
+        -------
+        A dataframe with the computed integral per hour and independent variable value.
+        """
         return (-1) * df.cumsum(axis=1)
 
     def _compute_diffusion_matrix(self) -> pd.DataFrame:
+        """ Calculate the mean of the diffusion values per hour i and hour j.
+
+        Returns
+        -------
+        A dataframe with the mean of the diffusion values per hour i and hour j.
+        """
         return self.df.groupby(["hour"])[self.diffusion_cols].mean()
 
     def _compute_sqrt_diffusion_matrix(self) -> np.ndarray:
+        """ Calculate the squared root of the diffusion matrix per hour i and hour j.
+
+        Returns
+        -------
+        A ndarrray with the squared root of the diffusion matrix per hour i and hour j.
+        """
         return sqrtm(self.diffusion_matrix)
 
     def _compute_diff_xi_xj(self, i: int, j: int) -> pd.DataFrame:
+        """ Calculate the daily diffusion coefficient for hour i and hour j as function of the independent values.
+
+        Parameters
+        ----------
+        i: int
+            The index representing the hour i.
+
+        j: int
+            The index representing the hour j.
+
+        Returns
+        -------
+        A dataframe containing the mean daily diffusion for hour i and hour j
+        as function of the independent values at hour i and hour j.
+        """
         diff_df = self.df.set_index("hour").loc[i].groupby([
             self.x_col_name, self.x_two_col_names[j - 1]
         ])[self.diffusion_cols[j - 1]].mean().unstack(-1)
@@ -508,6 +663,14 @@ class VectorTimeSeries(PotencialaBase):
         return diff_df.sort_index(axis=0).sort_index(axis=1)
 
     def _compute_diff_matrix_components(self) -> np.ndarray:
+        """ Compute the daily diffusion matrices as function of the independent values.
+
+        Returns
+        -------
+        diff_components_array: np.ndarray
+            A ndarray where each element (hour i, hour j) contains the daily diffusion matrix for
+            that hour i, hour j as function of the independent variable values at hour i and hour j.
+        """
         diff_components_array = np.zeros(shape=(24, 24), dtype=pd.DataFrame)
         for i in range(1, 25):
             for j in range(1, i+1):
@@ -515,6 +678,7 @@ class VectorTimeSeries(PotencialaBase):
         return diff_components_array
 
     def plot_hourly_boxplot(self) -> NoReturn:
+        """ Show a boxplot of the hourly spot price. """
         fig, ax = plt.subplots(figsize=(20, 7))
         self.df_vector.T.boxplot(ax=ax)
         ax.set_title("Hourly price boxplot")
@@ -523,6 +687,19 @@ class VectorTimeSeries(PotencialaBase):
         fig.show()
 
     def _plot_diffusion_2D(self, diff_df: pd.DataFrame, i: int, j: int) -> NoReturn:
+        """ Plot the mean daily diffusion for hour i,j in 2 dimensions.
+
+        Parameters
+        ----------
+        diff_df: pd.DataFrame
+            A dataframe containing the mean daily diffusion for hour i,j as function of the independent variable values.
+
+        i: int
+            The index representing the hour i.
+
+        j: int
+            The index representing the hour j.
+        """
         diff_df = diff_df.unstack(-1)
         fig, ax = plt.subplots()
         sns.heatmap(diff_df, cmap='crest', ax=ax)
@@ -532,6 +709,19 @@ class VectorTimeSeries(PotencialaBase):
         fig.show()
 
     def _plot_diffusion_3D(self, diff_df: pd.DataFrame, i: int, j: int) -> NoReturn:
+        """ Plot the mean daily diffusion for hour i,j in 2 dimensions.
+
+        Parameters
+        ----------
+        diff_df: pd.DataFrame
+            A dataframe containing the mean daily diffusion for hour i,j as function of the independent variable values.
+
+        i: int
+            The index representing the hour i.
+
+        j: int
+            The index representing the hour j.
+        """
         diff_df = diff_df.reset_index()
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(20, 10))
         ax.scatter(diff_df.iloc[:, 0], diff_df.iloc[:, 1], diff_df.iloc[:, 2])
@@ -541,6 +731,19 @@ class VectorTimeSeries(PotencialaBase):
         fig.show()
 
     def plot_diffusion_element(self, i: int, j: int, method: FigureShape = FigureShape.TwoDim) -> NoReturn:
+        """ Plot the mean daily diffusion coefficient for hour i, j as function of the independent variable values.
+
+        Parameters
+        ----------
+        i: int
+            The index representing the hour i.
+
+        j: int
+            The index representing the hour j.
+
+        method: FigureShape
+            Display as a 2D or 3D figure.
+        """
         diff_df = self.df.set_index("hour").loc[i].groupby([
             self.x_col_name, self.x_two_col_names[j-1]
         ])[self.diffusion_cols[j-1]].mean()
