@@ -15,6 +15,46 @@ class ComputationMode(Enum):
 
 
 class GaussianKernel:
+    """ Fit a Gaussian Kernel density estimation over a dataset and extract features from the probability density function.
+
+    Explain input, number of dimensions, independent variables, dependent variable Y | X ...
+
+    Attributes
+    ----------
+    computation_mode: ComputationMode
+        Compute the expected value function using Numpy or Numba.
+
+    mesh_chunks: int
+        Number of partitions of the mesh to sample and compute the probability density function.
+        It must be a divisor of each element of the grid_shape parameter.
+
+    kernel: stats.kde.gaussian_kde
+        The fitted Gaussian Kernel.
+
+    samples: np.ndarray
+        Transposed ndarray of the input dataset, shape = (dimensions, observations).
+        The last dimension corresponds to the dependent variable.
+
+    grid: Tuple[ndarray, ...]
+        Tuple of n elements containing ndarrays of shape grid_shape with values for the nth dimension.
+
+    p: np.ndarray
+        Ndarray containing the probability over the sampled mesh, shape = grid_shape.
+
+    expected_value_function: np.ndarray
+        Expected value of the dependent variable as function of the nth independent variables,
+        shape = (number of independent variables + 1, product of grid_shape elements for independent variables.
+
+    expected_value: float
+        Expected value of the dependent variable.
+
+    most_likely: np.ndarray
+        Most likely value extracted from the maximum of p, shape = (number of dimensions, )
+
+    expected_value_from_most_likely: np.ndarray
+        Expected value of the dependent variable for the most likely values of the independent variables,
+        shape = (number of dimensions, )
+    """
 
     def __init__(self,
                  samples: pd.DataFrame,
@@ -25,6 +65,50 @@ class GaussianKernel:
                  computation_mode: ComputationMode = ComputationMode.Simple,
                  mesh_chunks: int = 8
                  ):
+        """ Initialisation of the class.
+
+        Parameters
+        ----------
+        samples: pd.DataFrame
+            The observations to fit the Gaussian Kernel, shape = (observations, dimensions).
+            The last dimension (column) corresponds to the dependent variable we are interested to
+            extract expected and most likely values. The first (n-1)th dimensions are the independent variables.
+
+        grid_shape: Tuple[int, ...]
+            Tuple containing the number of points per dimension to sample from the fitted kernel.
+            Each number must be an integer value times the mesh_chunks parameter.
+
+        x_min: float
+            The minimum value of the first dimension to generate the sampling grid, default = None.
+            By default, the minimum value of the first dimension from the samples provided is used.
+
+        x_max: float
+            The maximum value of the first dimension to generate the sampling grid, default = None.
+            By default, the maximum value of the first dimension from the samples provided is used.
+
+        y_min: float
+            The minimum value of the second dimension to generate the sampling grid, default = None.
+            By default, the minimum value of the second dimension from the samples provided is used.
+
+        y_max: float
+            The maximum value of the second dimension to generate the sampling grid, default = None.
+            By default, the maximum value of the second dimension from the samples provided is used.
+
+        z_min: float
+            The minimum value of the third dimension to generate the sampling grid, default = None.
+            By default, the minimum value of the third dimension from the samples provided is used.
+
+        z_max: float
+            The maximum value of the third dimension to generate the sampling grid, default = None.
+            By default, the maximum value of the third dimension from the samples provided is used.
+
+        computation_mode: ComputationMode
+            Compute the expected value function using Numpy or Numba.
+
+        mesh_chunks: int
+            Number of partitions of the mesh to sample and compute the probability density function.
+            It must be a divisor of each element of the grid_shape parameter.
+        """
 
         self.computation_mode = computation_mode
         self.mesh_chunks = mesh_chunks
