@@ -1,3 +1,5 @@
+import warnings
+
 from typing import Tuple
 
 import numpy as np
@@ -6,6 +8,8 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from stochastic.coefficients import Coefficient
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 class EulerMaruyama:
