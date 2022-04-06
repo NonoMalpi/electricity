@@ -52,6 +52,9 @@ class PotencialaBase:
 
     df: pd.DataFrame
         Clean dataframe with hourly records about the signal and the independent variable.
+
+    drift_cols: List[str]
+        List of the drift column names.
     """
 
     def __init__(self,
@@ -238,18 +241,77 @@ class PotencialaBase:
 
 
 class SingleTimeSeries(PotencialaBase):
+    """ Compute several statistic of a univariate electricity price time series.
+
+    This class computes drift (related to first moment), diffusion (related to second moment),
+    potential (integral of the drift) and volatility (standard deviation of the drift).
+
+    Attributes
+    ----------
+    diffusion_cols: List[str]
+        List of diffusion column names.
+
+    drift: potenciala.metric.Metric
+        A Metric class containing information about the computed drifts.
+
+    diffusion: potenciala.metric.Metric
+        A Metric class containing information about the computed diffusion parameters.
+
+    potential: pd.DataFrame
+        A dataframe containing the numerical integral of the computed drifts.
+
+    volatility: Dict[str, float]
+        A Dictionary containing the standard deviation of the computed drifts.
+    """
 
     def __init__(self,
                  df: pd.DataFrame,
                  signal_name: str,
                  metric_lag_time: List[int],
                  quantile: List[float] = [0.10, 0.25, 0.50, 0.75, 0.90],
-                 bucket_method=BucketMethod.Cut,
-                 bin_size=2,
+                 bucket_method: BucketMethod = BucketMethod.Cut,
+                 bin_size: int = 2,
                  time_change: bool = True,
                  x_col_name: str = "x_label",
                  signal_transformation: str = None,
                  x_transformation: str = None):
+        """ Initialisation of the class.
+
+        Parameters
+        ----------
+         df: pd.DataFrame
+            The raw dataframe containing electricity time series information.
+
+        signal_name: str
+            The raw name of the signal to study.
+
+        metric_lag_time: List[int]
+             Number of time steps to compute statistics over the signal.
+
+        quantile: List[float]
+            List of quantile values for drift and diffusion metrics representation.
+
+        bucket_method: BucketMethod
+            Method to discretise the independent variable, default = BucketMethod.Cut.
+
+        bin_size: int
+            Length between marks for the BucketMethod.Cut, default = 2.
+
+        time_change: bool
+            Amend the clock change issue for the time series, default = True.
+
+        x_col_name: str
+            Name of the independent variable, default = "x_label".
+
+        signal_transformation: str
+            Name of the Transformer to apply to the signal, default = None.
+
+        x_transformation: str
+            Name of the Transformer to apply to the independent variable, default = None.
+
+
+
+        """
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -278,6 +340,7 @@ class SingleTimeSeries(PotencialaBase):
         self.volatility = self._compute_volatility()
 
     def _compute_diffusion(self) -> NoReturn:
+        """ Calculate signal diffusion for the different values of metric_lag_time attribute. """
         self.diffusion_cols = []
         for i in self.metric_lag_time:
             diffusion_col_name = f"diffusion_{i}"
@@ -285,12 +348,26 @@ class SingleTimeSeries(PotencialaBase):
             self.diffusion_cols.append(diffusion_col_name)
 
     def _compute_potential(self) -> pd.DataFrame:
+        """ Calculate integral of the mean drift values as function of the independent variable.
+
+        Parameters
+        ----------
+        potential_df: pd.DataFrame
+            A dataframe containing the potentials.
+        """
         potential_df = (-1) * self.drift.mean.cumsum()
         potential_df.columns = [f"potential_{i}" for i in self.metric_lag_time]
         self.potential_cols = potential_df.columns
         return potential_df
 
-    def _compute_volatility(self) -> Dict:
+    def _compute_volatility(self) -> Dict[str, float]:
+        """ Calculate the standard deviation of the drift values computed for the different values of metric_lag_attribute.
+
+        Returns
+        -------
+        volatility: Dict[str, float]
+            Key: Name of the computed volatility, value: standard deviation of the drift.
+        """
         volatility = {}
         for i in self.metric_lag_time:
             volatility[f"vol_{i}"] = self.df[f"drift_{i}"].std()
@@ -298,6 +375,17 @@ class SingleTimeSeries(PotencialaBase):
         return volatility
 
     def get_potential_percentiles(self, drift_col: str) -> pd.DataFrame:
+        """ Compute the potential of the chosen drift percentiles according to the quantile list.
+
+        Parameters
+        ----------
+        drift_col: str
+            The drift column name to compute potential percentiles.
+
+        Returns
+        -------
+        A dataframe containing the integral of the drift percentiles.
+        """
         return (-1) * self.drift.percentiles[drift_col].cumsum()
 
 
