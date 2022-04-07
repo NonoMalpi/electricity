@@ -387,3 +387,32 @@ class GaussianKernel:
             x_index, y_index = indexes[0], indexes[1]
             x = self.grid[0]
             return self.expected_value_function[:, x_index*x.shape[1]+y_index]
+
+
+def compute_historical_mean(df: pd.DataFrame, x_label_col_name: str, signal_col_name: str, rounded_decimals: int = 0) -> pd.Series:
+    """ Obtain the frequentist mean value of a signal as function of an independent variable.
+
+    Parameters
+    ----------
+    df: pd.DataFrame
+        A dataframe containing observations of the independent and dependent variables.
+
+    x_label_col_name: str
+        Column name of the independent variable.
+
+    signal_col_name: str
+        Column name of the dependent variable.
+
+    rounded_decimals: int
+        Number of decimals to round the independent variable, default = 0.
+
+    Returns
+    -------
+    mean_x: pd.Series
+        Series containing the mean value of the dependent variable as function of the independent variable.
+    """
+    aux_df = df.copy(deep=True)
+    aux_df[x_label_col_name] = aux_df[x_label_col_name].round(decimals=rounded_decimals)
+    mean_x = aux_df.groupby(x_label_col_name)[signal_col_name].mean()
+
+    return mean_x
