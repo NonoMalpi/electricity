@@ -30,6 +30,35 @@ class PotencialaBase:
     electricity price value, which is called the independent variable (x), e.g, the  1 hour or 24 hour drift
     as a function of the price value. It also performs transformations on the signal and the independent variable.
 
+    Parameters
+    ----------
+    df: pd.DataFrame
+        The raw dataframe containing electricity time series information.
+
+    signal_name: str
+        The raw name of the signal to study.
+
+    metric_lag_time: List[int]
+         Number of time steps to compute statistics over the signal.
+
+    bucket_method: BucketMethod
+        Method to discretise the independent variable, default = BucketMethod.Cut.
+
+    bin_size: int
+        Length between marks for the BucketMethod.Cut, default = 2.
+
+    time_change: bool
+        Amend the clock change issue for the time series, default = True.
+
+    x_col_name: str
+        Name of the independent variable, default = "x_label".
+
+    signal_transformation: str
+        Name of the Transformer to apply to the signal, default = None.
+
+    x_transformation: str
+        Name of the Transformer to apply to the independent variable, default = None.
+
     Attributes
     ----------
     signal_transformer: potenciala.transformers.Transformer
@@ -67,37 +96,6 @@ class PotencialaBase:
                  x_col_name: str = "x_label",
                  signal_transformation: str = None,
                  x_transformation: str = None):
-        """ Initialisation of the class.
-
-        Parameters
-        ----------
-        df: pd.DataFrame
-            The raw dataframe containing electricity time series information.
-
-        signal_name: str
-            The raw name of the signal to study.
-
-        metric_lag_time: List[int]
-             Number of time steps to compute statistics over the signal.
-
-        bucket_method: BucketMethod
-            Method to discretise the independent variable, default = BucketMethod.Cut.
-
-        bin_size: int
-            Length between marks for the BucketMethod.Cut, default = 2.
-
-        time_change: bool
-            Amend the clock change issue for the time series, default = True.
-
-        x_col_name: str
-            Name of the independent variable, default = "x_label".
-
-        signal_transformation: str
-            Name of the Transformer to apply to the signal, default = None.
-
-        x_transformation: str
-            Name of the Transformer to apply to the independent variable, default = None.
-        """
 
         self.signal_transformer = TransformerFactory.build(transformer_type=signal_transformation)
         self.x_transformer = TransformerFactory.build(transformer_type=x_transformation)
@@ -246,6 +244,38 @@ class SingleTimeSeries(PotencialaBase):
     This class computes drift (related to first moment), diffusion (related to second moment),
     potential (integral of the drift) and volatility (standard deviation of the drift).
 
+    Parameters
+    ----------
+     df: pd.DataFrame
+        The raw dataframe containing electricity time series information.
+
+    signal_name: str
+        The raw name of the signal to study.
+
+    metric_lag_time: List[int]
+         Number of time steps to compute statistics over the signal.
+
+    quantile: List[float]
+        List of quantile values for drift and diffusion metrics representation.
+
+    bucket_method: BucketMethod
+        Method to discretise the independent variable, default = BucketMethod.Cut.
+
+    bin_size: int
+        Length between marks for the BucketMethod.Cut, default = 2.
+
+    time_change: bool
+        Amend the clock change issue for the time series, default = True.
+
+    x_col_name: str
+        Name of the independent variable, default = "x_label".
+
+    signal_transformation: str
+        Name of the Transformer to apply to the signal, default = None.
+
+    x_transformation: str
+        Name of the Transformer to apply to the independent variable, default = None.
+
     Attributes
     ----------
     diffusion_cols: List[str]
@@ -275,40 +305,6 @@ class SingleTimeSeries(PotencialaBase):
                  x_col_name: str = "x_label",
                  signal_transformation: str = None,
                  x_transformation: str = None):
-        """ Initialisation of the class.
-
-        Parameters
-        ----------
-         df: pd.DataFrame
-            The raw dataframe containing electricity time series information.
-
-        signal_name: str
-            The raw name of the signal to study.
-
-        metric_lag_time: List[int]
-             Number of time steps to compute statistics over the signal.
-
-        quantile: List[float]
-            List of quantile values for drift and diffusion metrics representation.
-
-        bucket_method: BucketMethod
-            Method to discretise the independent variable, default = BucketMethod.Cut.
-
-        bin_size: int
-            Length between marks for the BucketMethod.Cut, default = 2.
-
-        time_change: bool
-            Amend the clock change issue for the time series, default = True.
-
-        x_col_name: str
-            Name of the independent variable, default = "x_label".
-
-        signal_transformation: str
-            Name of the Transformer to apply to the signal, default = None.
-
-        x_transformation: str
-            Name of the Transformer to apply to the independent variable, default = None.
-        """
 
         super().__init__(df=df,
                          signal_name=signal_name,
@@ -393,6 +389,38 @@ class VectorTimeSeries(PotencialaBase):
     where each dimension corresponds to one hour. Then, it computes the daily drift (related to first moment),
     daily diffusion matrix (related to second moment) and daily potential (integral of the drift).
 
+    Parameters
+    ----------
+     df: pd.DataFrame
+        The raw dataframe containing electricity time series information.
+
+    signal_name: str
+        The raw name of the signal to study.
+
+    bucket_method: BucketMethod
+        Method to discretise the independent variable, default = BucketMethod.Cut.
+
+    bin_size: int
+        Length between marks for the BucketMethod.Cut, default = 2.
+
+    time_change: bool
+        Amend the clock change issue for the time series, default = True.
+
+    x_col_name: str
+        Name of the independent variable, default = "x_label".
+
+    diff_matrix_xi_xj_computation: bool
+        Flag to indicate whether computing diff_xi_xj attribute, default = False.
+
+    signal_transformation: str
+        Name of the Transformer to apply to the signal, default = None.
+
+    x_transformation: str
+        Name of the Transformer to apply to the independent variable, default = None.
+
+    drift_quantile: List[float]
+        List of quantiles values for drift representation.
+
     Attributes
     ----------
     drift_quantile: List[float]
@@ -444,40 +472,6 @@ class VectorTimeSeries(PotencialaBase):
                  signal_transformation: str = None,
                  x_transformation: str = None,
                  drift_quantile: List[float] = [0.2, 0.3, 0.4, 0.6, 0.7, 0.8]):
-        """ Initialisation of the class.
-
-        Parameters
-        ----------
-         df: pd.DataFrame
-            The raw dataframe containing electricity time series information.
-
-        signal_name: str
-            The raw name of the signal to study.
-
-        bucket_method: BucketMethod
-            Method to discretise the independent variable, default = BucketMethod.Cut.
-
-        bin_size: int
-            Length between marks for the BucketMethod.Cut, default = 2.
-
-        time_change: bool
-            Amend the clock change issue for the time series, default = True.
-
-        x_col_name: str
-            Name of the independent variable, default = "x_label".
-
-        diff_matrix_xi_xj_computation: bool
-            Flag to indicate whether computing diff_xi_xj attribute, default = False.
-
-        signal_transformation: str
-            Name of the Transformer to apply to the signal, default = None.
-
-        x_transformation: str
-            Name of the Transformer to apply to the independent variable, default = None.
-
-        drift_quantile: List[float]
-            List of quantiles values for drift representation.
-        """
 
         super().__init__(df=df,
                          signal_name=signal_name,

@@ -24,6 +24,48 @@ class GaussianKernel:
     dependent variable are computed sampling from the resulting PDF. For such purpose, a d-dimensional mesh
     is generated.
 
+    Parameters
+    ----------
+    samples: pd.DataFrame
+        The observations to fit the Gaussian Kernel, shape = (observations, dimensions).
+        The last dimension (column) corresponds to the dependent variable we are interested to
+        extract expected and most likely values. The first (n-1)th dimensions are the independent variables.
+
+    grid_shape: Tuple[int, ...]
+        Tuple containing the number of points per dimension to sample from the fitted kernel.
+        Each number must be an integer value times the mesh_chunks parameter.
+
+    x_min: float
+        The minimum value of the first dimension to generate the sampling grid, default = None.
+        By default, the minimum value of the first dimension from the samples provided is used.
+
+    x_max: float
+        The maximum value of the first dimension to generate the sampling grid, default = None.
+        By default, the maximum value of the first dimension from the samples provided is used.
+
+    y_min: float
+        The minimum value of the second dimension to generate the sampling grid, default = None.
+        By default, the minimum value of the second dimension from the samples provided is used.
+
+    y_max: float
+        The maximum value of the second dimension to generate the sampling grid, default = None.
+        By default, the maximum value of the second dimension from the samples provided is used.
+
+    z_min: float
+        The minimum value of the third dimension to generate the sampling grid, default = None.
+        By default, the minimum value of the third dimension from the samples provided is used.
+
+    z_max: float
+        The maximum value of the third dimension to generate the sampling grid, default = None.
+        By default, the maximum value of the third dimension from the samples provided is used.
+
+    computation_mode: ComputationMode
+        Compute the expected value function using Numpy or Numba.
+
+    mesh_chunks: int
+        Number of partitions of the mesh to sample and compute the probability density function.
+        It must be a divisor of each element of the grid_shape parameter.
+
     Attributes
     ----------
     computation_mode: ComputationMode
@@ -70,50 +112,6 @@ class GaussianKernel:
                  computation_mode: ComputationMode = ComputationMode.Simple,
                  mesh_chunks: int = 8
                  ):
-        """ Initialisation of the class.
-
-        Parameters
-        ----------
-        samples: pd.DataFrame
-            The observations to fit the Gaussian Kernel, shape = (observations, dimensions).
-            The last dimension (column) corresponds to the dependent variable we are interested to
-            extract expected and most likely values. The first (n-1)th dimensions are the independent variables.
-
-        grid_shape: Tuple[int, ...]
-            Tuple containing the number of points per dimension to sample from the fitted kernel.
-            Each number must be an integer value times the mesh_chunks parameter.
-
-        x_min: float
-            The minimum value of the first dimension to generate the sampling grid, default = None.
-            By default, the minimum value of the first dimension from the samples provided is used.
-
-        x_max: float
-            The maximum value of the first dimension to generate the sampling grid, default = None.
-            By default, the maximum value of the first dimension from the samples provided is used.
-
-        y_min: float
-            The minimum value of the second dimension to generate the sampling grid, default = None.
-            By default, the minimum value of the second dimension from the samples provided is used.
-
-        y_max: float
-            The maximum value of the second dimension to generate the sampling grid, default = None.
-            By default, the maximum value of the second dimension from the samples provided is used.
-
-        z_min: float
-            The minimum value of the third dimension to generate the sampling grid, default = None.
-            By default, the minimum value of the third dimension from the samples provided is used.
-
-        z_max: float
-            The maximum value of the third dimension to generate the sampling grid, default = None.
-            By default, the maximum value of the third dimension from the samples provided is used.
-
-        computation_mode: ComputationMode
-            Compute the expected value function using Numpy or Numba.
-
-        mesh_chunks: int
-            Number of partitions of the mesh to sample and compute the probability density function.
-            It must be a divisor of each element of the grid_shape parameter.
-        """
 
         self.computation_mode = computation_mode
         self.mesh_chunks = mesh_chunks
