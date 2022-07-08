@@ -143,7 +143,7 @@ class EulerMaruyama:
 
         return y
 
-    def _simulate_path(self, x0: np.ndarray, x0_dim: int, x0_time_step: int) -> np.ndarray:
+    def _simulate_path(self, x0: np.ndarray, x0_dim: int, x0_time_step: int, seed: int) -> np.ndarray:
         """ Simulate a single trajectory through Euler-Maruyama method.
 
         Parameters
@@ -157,11 +157,15 @@ class EulerMaruyama:
         x0_time_step: float
             The number of time step after the initial condition.
 
+        seed: int
+            The random seed to generate the path.
+
         Returns
         -------
         np.ndarray
             The resulting trajectory, shape = (n_dim * self.periods, )
         """
+        np.random.seed(seed=seed)
         y = self._set_y_array(x0=x0, x0_dim=x0_dim, x0_time_step=x0_time_step)
 
         for t in range(x0_time_step, self.periods):
@@ -194,12 +198,17 @@ class EulerMaruyama:
         sim_df: pd.DataFrame
             A dataframe with the resulting trajectories, shape = (n_dim * self.periods, self.num_sim)
         """
+
+        # generate seeds to keep reproducible simulations working with Joblib
+        # source: https://joblib.readthedocs.io/en/latest/auto_examples/parallel_random_state.html
         np.random.seed(seed=random_seed)
+        random_seeds = np.random.randint(np.iinfo(np.int32).max, size=self.num_sim)
+
         x0, x0_dim, x0_time_step = self._check_x0_input(x0=x0)
 
         paths = Parallel(n_jobs=-1, verbose=0)(
-            delayed(self._simulate_path)(x0=x0, x0_dim=x0_dim, x0_time_step=x0_time_step)
-            for _ in range(self.num_sim)
+            delayed(self._simulate_path)(x0=x0, x0_dim=x0_dim, x0_time_step=x0_time_step, seed=seed)
+            for seed in random_seeds
         )
 
         sim_df = pd.DataFrame(paths).T
