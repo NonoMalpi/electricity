@@ -4,31 +4,20 @@ import torch.nn as nn
 
 
 class ODEfunc(nn.Module):
-    def __init__(self, obs_dim: int, hidden_layer_1: int, hidden_layer_2: int,
-                 hidden_layer_3: int, hidden_layer_4: int,
-                 hidden_layer_5: int):
+    def __init__(self, obs_dim: int, hidden_layer_1: int):
         """ Simple neural network for the ODE Solver.
 
         It consists of two hidden layers with relu activation function
 
         :param obs_dim: The observable dimension.
         :param hidden_layer_1: Dimension of the first hidden layer
-        :param hidden_layer_2: Dimension of the second hidden layer
         """
         super(ODEfunc, self).__init__()
 
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_layer_1),
             nn.Tanh(),
-            nn.Linear(hidden_layer_1, hidden_layer_2),
-            nn.Tanh(),
-            nn.Linear(hidden_layer_2, hidden_layer_3),
-            nn.Tanh(),
-            nn.Linear(hidden_layer_3, hidden_layer_4),
-            nn.Tanh(),
-            nn.Linear(hidden_layer_4, hidden_layer_5),
-            nn.Tanh(),
-            nn.Linear(hidden_layer_5, obs_dim),
+            nn.Linear(hidden_layer_1, obs_dim),
         )
 
         for m in self.net.modules():
