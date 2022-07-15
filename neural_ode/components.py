@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 
-class ODEfunc(nn.Module):
+class NeuralODEfunc(nn.Module):
     def __init__(self, obs_dim: int, hidden_layer_1: int):
         """ Simple neural network for the ODE Solver.
 
@@ -12,7 +12,7 @@ class ODEfunc(nn.Module):
         :param obs_dim: The observable dimension.
         :param hidden_layer_1: Dimension of the first hidden layer
         """
-        super(ODEfunc, self).__init__()
+        super(NeuralODEfunc, self).__init__()
 
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_layer_1),
