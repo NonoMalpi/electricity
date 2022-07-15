@@ -48,45 +48,6 @@ class ScenarioParams:
         self.epochs = epochs
 
 
-def generate_training_set(sim_df: pd.DataFrame, actual_series: pd.Series, params: ScenarioParams) -> pd.DataFrame:
-    """ Generate training set by computing the difference between the simulated and trajectories and the actual trajectory.
-
-    The difference can be considered as the external drift that is not captured by the stationary formulation.
-    In addition, this function splits the whole external drift into as many dimensions considered in the stationary
-    formulation, e.g. 24.
-
-    Parameters
-    ----------
-    sim_df: pd.DataFrame
-        Dataframe containing the simulated trajectories (sim_periods, n_sim).
-
-    actual_series: pd.Series
-        Series containing the actual trajectory (sim_periods,).
-
-    params: ScenarioParams
-        Class containing simulation parameters and auxiliary information.
-
-    Returns
-    -------
-    hour_ts_diff_df: pd.DataFrame
-        Dataframe containing the training set with MultiIndex(hour, time step) and number of simulation as columns.
-    """
-    diff_df = sim_df.subtract(actual_series, axis="index")
-    diff_df.index = pd.RangeIndex(start=1, stop=diff_df.index.max() + 2, step=1)
-
-    hour_indexes = np.vstack([np.arange(1, 25, 1) + 24 * i for i in range(params.sim_periods)]).T
-
-    hours_list = np.arange(1, 25)
-    ts = np.arange(0, params.sim_periods)
-    multi_idx = pd.MultiIndex.from_product([hours_list, ts])
-    hour_ts_diff_df = pd.DataFrame(index=multi_idx, columns=diff_df.columns, dtype=float)
-
-    for i, h in enumerate(hours_list):
-        hour_ts_diff_df.loc[h] = diff_df.loc[hour_indexes[i]].values
-
-    return hour_ts_diff_df
-
-
 def get_multivariate_batch(train_df: pd.DataFrame, time_period: int, params: ScenarioParams) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """ Obtain a random batch tensor from training set with length time_period and size equal to params.batch_size.
 
