@@ -16,21 +16,26 @@ from neural_ode import NeuralODEfunc, RunningAverageMeter
 from plot.external_drift import plot_training_evaluation
 
 
-def train_neural_ode_step(k: int,
-                          neural_ode: NeuralODEfunc,
+# TODO: Add classes for multivariate and univariate neural ODEs
+#  Idea: define two classes that inherit from a base class with methods to:
+#   - Define neural odes and optimizers
+#   - Initialise loss meters
+#   - Train neural ODE(s)
+#   - Compute losse(s)
+#   - Evaluate out-of-sample prediction
+
+def train_neural_ode_step(neural_ode: NeuralODEfunc,
                           optimizer: torch.optim.Optimizer,
                           loss_meter: RunningAverageMeter,
                           batch_y0: torch.Tensor,
                           batch_t: torch.Tensor,
-                          batch_y: torch.Tensor
+                          batch_y: torch.Tensor,
+                          k: int = 0
                           ) -> Tuple[int, NeuralODEfunc, torch.optim.Optimizer, RunningAverageMeter]:
     """ Compute the neural ODE through the specified time steps, calculate loss and update neural ODE parameters.
 
     Parameters
     ----------
-    k: int
-        Auxiliary index to indicate the neural ODE to train.
-
     neural_ode: NeuralODEfunc
         Class containing the neural ODE architecture.
 
@@ -48,6 +53,10 @@ def train_neural_ode_step(k: int,
 
     batch_y: torch.Tensor
         Tensor containing the whole trajectory (time_period + 1, batch_size, 1, obs_dim).
+
+    k: int
+        Auxiliary index to indicate the neural ODE to train, default = 0 if it is not needed to specify
+        the neural ODE to train.
 
     Returns
     -------
@@ -135,13 +144,13 @@ def train_multivariate_neural_ode_external_drift(params: ScenarioParams,
             batch_t = batch_t.to(device)
             batch_y = batch_y.to(device)
 
-            pred_y = odeint(func, batch_y0, batch_t).to(device)
+            _, func, optimizer, loss_meter = train_neural_ode_step(neural_ode=func,
+                                                                   optimizer=optimizer,
+                                                                   loss_meter=loss_meter,
+                                                                   batch_y0=batch_y0,
+                                                                   batch_t=batch_t,
+                                                                   batch_y=batch_y)
 
-            loss = torch.mean(torch.abs(pred_y - batch_y))
-            loss.backward()
-            optimizer.step()
-
-            loss_meter.update(loss.item())
             end = time.time()
             training_time = (end - start) / 60
 
@@ -240,13 +249,13 @@ def train_univariate_neural_ode_external_drift(params: ScenarioParams,
 
             train_step_list = Parallel(n_jobs=-1, verbose=0)(
                 delayed(train_neural_ode_step)(
-                    k=k,
                     neural_ode=neural_odes_dict[k],
                     optimizer=optimizer_dict[k],
                     loss_meter=loss_meter_dict[k],
                     batch_y0=batch_y0[:, :, k - 1].reshape(params.batch_size, 1, 1),
                     batch_t=batch_t,
-                    batch_y=batch_y[:, :, :, k - 1].reshape(-1, params.batch_size, 1, 1)
+                    batch_y=batch_y[:, :, :, k - 1].reshape(-1, params.batch_size, 1, 1),
+                    k=k
                 ) for k in range(1, params.obs_dim + 1)
             )
 
@@ -292,3 +301,102 @@ def train_univariate_neural_ode_external_drift(params: ScenarioParams,
                 print("\n" + "=" * 115 + "\n")
 
     return pred_ext_drift_dict
+
+
+# TODO: Refactor this method
+def train_neural_ode_external_drift(params: ScenarioParams,
+                                    hidden_layer_neurons: int,
+                                    learning_rate: float,
+                                    train_df: pd.DataFrame):
+    """ TBC
+
+    """
+    device = torch.device("cpu")
+
+    init_window_length = 0
+
+    pred_ext_drift_dict = {}
+
+    neural_odes_dict = {}
+    optimizer_dict = {}
+    num_odes = 1 # this must be changed according to method
+    for k in range(1, num_odes + 1):
+        func = NeuralODEfunc(obs_dim=params.obs_dim, hidden_layer_1=hidden_layer_neurons).to(device) # this must be changed
+        neural_odes_dict[k] = func
+        optimizer_dict[k] = torch.optim.RMSprop(func.parameters(), lr=learning_rate)
+
+    start = time.time()
+    for j in range(1, params.sim_periods - 1):
+        training_ts = init_window_length + params.delta_t * j
+
+        loss_meter_dict = {k: RunningAverageMeter(0.97) for k in range(1, num_odes + 1)}
+        for itr in range(0, params.epochs + 1):
+            batch_y0, batch_t, batch_y = get_multivariate_batch(train_df=train_df,
+                                                                time_period=training_ts,
+                                                                params=params)
+            batch_y0 = batch_y0.to(device)
+            batch_t = batch_t.to(device)
+            batch_y = batch_y.to(device)
+
+            # this approach is slower than train_multivariate_neural_ode_external_drift
+            train_step_list = Parallel(n_jobs=1, verbose=0)( # this must be changed
+                delayed(train_neural_ode_step)(
+                    k=k,
+                    neural_ode=neural_odes_dict[k],
+                    optimizer=optimizer_dict[k],
+                    loss_meter=loss_meter_dict[k],
+                    batch_y0=batch_y0, # this must be changed
+                    batch_t=batch_t,
+                    batch_y=batch_y # this must be changed
+                ) for k in range(1, num_odes + 1)
+            )
+
+            # update dictionaries, this is a faster operation that sharing memory to update dictionaries inside
+            # parallel computation through Parallel(..., backend="threading")
+            for element in train_step_list:
+                k = element[0]
+                neural_odes_dict[k] = element[1]
+                optimizer_dict[k] = element[2]
+                loss_meter_dict[k] = element[3]
+
+            end = time.time()
+            training_time = (end - start) / 60
+            if itr % (params.epochs // 8) == 0:
+                loss_array = np.array([value.avg for k, value in loss_meter_dict.items()])
+                loss_mean = loss_array.mean()
+                print(
+                    f"Training time step {j} - Iteration: {itr:04d} | Total loss {loss_mean:.6f} | Time: {training_time:.2f} mins")
+
+            if itr % (params.epochs // 2) == 0:
+                true_y0 = get_mean_tensor_from_training_set(train_df=train_df, time_step=0).to(device)
+                batch_test_t = torch.from_numpy(np.arange(training_ts + 2, dtype=float))
+                true_test_y = get_mean_tensor_from_training_set(train_df=train_df, time_step=training_ts + 1).to(device)
+
+                with torch.no_grad():
+                    pred_test_y_list = []
+                    for k in range(1, num_odes + 1):
+                        pred_test_y_k = odeint(neural_odes_dict[k], true_y0, batch_test_t) # this must be changed
+                        pred_test_y_list.append(pred_test_y_k)
+                    pred_test_y = torch.hstack(pred_test_y_list).reshape(training_ts + 2, 1, 1, -1)
+                    plot_training_evaluation(pred_tensor=pred_test_y,
+                                             train_df=train_df,
+                                             training_ts=training_ts,
+                                             params=params,
+                                             rows=3,
+                                             columns=8)
+                    plt.show()
+
+                    test_loss = torch.mean(torch.abs(true_test_y - pred_test_y[-1]))
+                    print(f"Mean absolute value error for test: {test_loss:.2f}")
+                    if itr == params.epochs:
+                        pred_ext_drift_dict[training_ts] = pred_test_y
+
+                print("\n" + "=" * 115 + "\n")
+
+        return pred_ext_drift_dict
+
+
+
+
+
+
