@@ -1,8 +1,15 @@
+from enum import Enum
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
 import torch
+
+
+class SignalDimension(Enum):
+    """ Enum to indicate whether training the neural ODE with a univariate or multivariate signal. """
+    Univariate = 1
+    Multivariate = 2
 
 
 class ScenarioParams:
@@ -30,6 +37,9 @@ class ScenarioParams:
 
     epochs: int
         Number of epochs to train neural ODE
+
+    lr: float
+        Learning rate to train neural ODE
     """
     def __init__(self,
                  sim_periods: int,
@@ -38,7 +48,8 @@ class ScenarioParams:
                  seed: int,
                  batch_size: int,
                  obs_dim: int,
-                 epochs: int):
+                 epochs: int,
+                 lr: float):
         self.sim_periods = sim_periods
         self.n_sim = n_sim
         self.delta_t = delta_t
@@ -46,6 +57,7 @@ class ScenarioParams:
         self.batch_size = batch_size
         self.obs_dim = obs_dim
         self.epochs = epochs
+        self.lr = lr
 
 
 def get_multivariate_batch(train_df: pd.DataFrame, time_period: int, params: ScenarioParams) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
