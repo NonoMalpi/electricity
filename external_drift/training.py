@@ -1,7 +1,7 @@
 import time
 
 from abc import ABC, abstractmethod
-from typing import Dict, NoReturn, Tuple
+from typing import Dict, List, NoReturn, Tuple
 
 import torch
 
@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 from torchdiffeq import odeint
 
 from external_drift.utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
-from neural_ode import NeuralODEfunc, RunningAverageMeter
+from ml.neural_network import NeuralNetFunc, RunningAverageMeter
 from plot.external_drift import plot_training_evaluation
 
 
@@ -88,19 +88,19 @@ class NeuralODEBase(ABC):
         pass
 
     @staticmethod
-    def train_neural_ode_step(neural_ode: NeuralODEfunc,
+    def train_neural_ode_step(neural_ode: NeuralNetFunc,
                               optimizer: torch.optim.Optimizer,
                               loss_meter: RunningAverageMeter,
                               batch_y0: torch.Tensor,
                               batch_t: torch.Tensor,
                               batch_y: torch.Tensor,
                               k: int = 0
-                              ) -> Tuple[int, NeuralODEfunc, torch.optim.Optimizer, RunningAverageMeter]:
+                              ) -> Tuple[int, NeuralNetFunc, torch.optim.Optimizer, RunningAverageMeter]:
         """ Compute the neural ODE through the specified time steps, calculate loss and update neural ODE parameters.
 
         Parameters
         ----------
-        neural_ode: NeuralODEfunc
+        neural_ode: NeuralNetFunc
             Class containing the neural ODE architecture.
 
         optimizer: torch.optim.Optimizer
@@ -127,7 +127,7 @@ class NeuralODEBase(ABC):
          k: int
             Auxiliary index to indicate the neural ODE to train.
 
-        neural_ode: NeuralODEfunc
+        neural_network: NeuralODEfunc
             Class containing the neural ODE architecture with the updated parameters.
 
         optimizer: torch.optim.Optimizer
@@ -157,7 +157,7 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
     params: ScenarioParams
         Class containing simulation parameters and auxiliary information.
 
-    neural_ode_template: NeuralODEfunc
+    neural_ode_template: NeuralNetFunc
         The neural network architecture
 
     optimizer: torch.optim.Optimizer
@@ -174,7 +174,7 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
     device: torch.device
         Determine if CPU or GPU is used.
 
-    neural_ode: NeuralODEfunc
+    neural_ode: NeuralNetFunc
         The neural network architecture
 
     optimizer: torch.optim.Optimizer
@@ -197,7 +197,7 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
 
     def __init__(self,
                  params: ScenarioParams,
-                 neural_ode_template: NeuralODEfunc,
+                 neural_ode_template: NeuralNetFunc,
                  optimizer: torch.optim.Optimizer,
                  loss_momentum: float):
 
@@ -268,7 +268,7 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
     params: ScenarioParams
         Class containing simulation parameters and auxiliary information.
 
-    neural_ode_template: NeuralODEfunc
+    neural_ode_template: NeuralNetFunc
         The neural network architecture
 
     optimizer: torch.optim.Optimizer
@@ -285,7 +285,7 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
     device: torch.device
         Determine if CPU or GPU is used.
 
-    neural_ode: Dict[int, NeuralODEfunc]
+    neural_ode: Dict[int, NeuralNetFunc]
         Dictionary containing integer identifier of neural ODE as key and neural network architecture as value.
 
     optimizer: Dict[int, torch.optim.Optimizer]
@@ -308,7 +308,7 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
 
     def __init__(self,
                  params: ScenarioParams,
-                 neural_ode_template: NeuralODEfunc,
+                 neural_ode_template: NeuralNetFunc,
                  optimizer: torch.optim,
                  loss_momentum: float):
 
@@ -395,9 +395,10 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
 # TODO: Refactor this method to input neural network architecture
 def train_neural_ode_external_drift(params: ScenarioParams,
                                     signal_dimension: SignalDimension,
-                                    hidden_layer_neurons: int,
-                                    train_df: pd.DataFrame) -> Dict[int, torch.Tensor]:
-    """ Train a simple 1 hidden layer neural ODE and evaluate test time steps.
+                                    hidden_layer_neurons: List[int],
+                                    activation_functions: List[torch.nn.modules.activation.Module],
+                                    train_df: pd.DataFrame) -> Tuple[Dict[int, torch.Tensor], NeuralODEBase]:
+    """ Train a simple neural ODE for the net architecture provided and evaluate test time steps.
 
     The neural ODE is trained following a time-sequential approach, incrementally adding observations,
     which improves convergence.
@@ -417,11 +418,11 @@ def train_neural_ode_external_drift(params: ScenarioParams,
     signal_dimension: SignalDimension
         Enumeration indicating whether training neural ODE with a univariate or multivariate signal.
 
-    hidden_layer_neurons: int
-        Number of neurons in the hidden layer.
+    hidden_layer_neurons:
+        List containing number of neurons for each hidden layer.
 
-    learning_rate: float
-        Learning rate to use in the optimizer.
+    activation_functions: List[nn.modules.activation.Module]
+        List containing the activation function to apply after each layer.
 
     train_df: pd.DataFrame
         The training set with MultiIndex(hour, time step) and number of simulation as columns.
@@ -431,6 +432,9 @@ def train_neural_ode_external_drift(params: ScenarioParams,
     pred_ext_drift_dict: Dict[int, torch.Tensor]
         Dictionary containing training time step as keys and predicted tensor
         of shape (training time step + 2, 1, 1, obs_dim) as values.
+
+    node: NeuralODEBase
+        Neural ODE fitted.
     """
     device = torch.device("cpu")
 
@@ -441,13 +445,17 @@ def train_neural_ode_external_drift(params: ScenarioParams,
     # TODO: Refactor this to include neural network architecture
     node: NeuralODEBase = None
     if signal_dimension == SignalDimension.Multivariate:
-        func = NeuralODEfunc(obs_dim=params.obs_dim, hidden_layer_1=hidden_layer_neurons)
+        func = NeuralNetFunc(obs_dim=params.obs_dim,
+                             hidden_layer_neurons=hidden_layer_neurons,
+                             activation_functions=activation_functions)
         node = SingleMultivariateNeuralODE(params=params,
                                            neural_ode_template=func,
                                            optimizer=torch.optim.RMSprop,
                                            loss_momentum=0.97)
     elif signal_dimension == SignalDimension.Univariate:
-        func = NeuralODEfunc(obs_dim=1, hidden_layer_1=hidden_layer_neurons)
+        func = NeuralNetFunc(obs_dim=1,
+                             hidden_layer_neurons=hidden_layer_neurons,
+                             activation_functions=activation_functions)
         node = MultipleUnivariateNeuralODE(params=params,
                                            neural_ode_template=func,
                                            optimizer=torch.optim.RMSprop,
@@ -497,4 +505,4 @@ def train_neural_ode_external_drift(params: ScenarioParams,
 
                 print("\n" + "=" * 115 + "\n")
 
-        return pred_ext_drift_dict
+    return pred_ext_drift_dict, node

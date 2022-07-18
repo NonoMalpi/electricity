@@ -1,36 +1,105 @@
+from typing import List, NoReturn
+
 import torch
 
 import torch.nn as nn
 
 
-class NeuralODEfunc(nn.Module):
-    def __init__(self, obs_dim: int, hidden_layer_1: int):
-        """ Simple neural network for the ODE Solver.
+class NeuralNetFunc(nn.Module):
+    """ Class containing a neural network module used in the neural ODE framework.
 
-        It consists of two hidden layers with relu activation function
+    Parameters
+    ----------
+    obs_dim: int
+        The observable dimension of the input and output layers.
 
-        :param obs_dim: The observable dimension.
-        :param hidden_layer_1: Dimension of the first hidden layer
+    hidden_layer_neurons:
+        List containing number of neurons for each hidden layer.
+
+    activation_functions: List[nn.modules.activation.Module]
+        List containing the activation function to apply after each layer.
+
+    Attributes
+    ----------
+    net: torch.nn.Sequential
+        The neural net architecture.
+
+    Methods
+    -------
+    forward
+    """
+    def __init__(self,
+                 obs_dim: int,
+                 hidden_layer_neurons: List[int],
+                 activation_functions: List[nn.modules.activation.Module]):
+        super(NeuralNetFunc, self).__init__()
+
+        self.net = self._build_net_architecture(obs_dim=obs_dim,
+                                                hidden_layer_neurons=hidden_layer_neurons,
+                                                activation_functions=activation_functions)
+
+        self._initialize_parameters()
+
+    def _build_net_architecture(self,
+                                obs_dim: int,
+                                hidden_layer_neurons: List[int],
+                                activation_functions: List[torch.nn.modules.activation.Module]) -> torch.nn.Sequential:
+        """ Generate the sequential neural network achitecture.
+
+        Parameters
+        ----------
+        obs_dim: int
+            The observable dimension of the input and output layers.
+
+        hidden_layer_neurons:
+            List containing number of neurons for each hidden layer.
+
+        activation_functions: List[nn.modules.activation.Module]
+            List containing the activation function to apply after each layer.
+
+        Returns
+        -------
+        torch.nn.Sequential
+            The sequence of modules constituting the neural network.
         """
-        super(NeuralODEfunc, self).__init__()
 
-        self.net = nn.Sequential(
-            nn.Linear(obs_dim, hidden_layer_1),
-            nn.Tanh(),
-            nn.Linear(hidden_layer_1, obs_dim),
-        )
+        assert len(hidden_layer_neurons) == len(activation_functions), \
+            "hidden_layer_neurons list and activation_functions list must be of the same length."
 
+        modules_list = []
+
+        for k in range(len(hidden_layer_neurons)):
+            in_features = obs_dim if k == 0 else hidden_layer_neurons[k - 1]
+            out_features = hidden_layer_neurons[k]
+            modules_list.append(nn.Linear(in_features=in_features, out_features=out_features))
+            modules_list.append(activation_functions[k])
+
+        modules_list.append(nn.Linear(in_features=hidden_layer_neurons[-1], out_features=obs_dim))
+
+        return nn.Sequential(*modules_list)
+
+    def _initialize_parameters(self) -> NoReturn:
+        """ Initialize weights and bias of linear modules. """
         for m in self.net.modules():
             if isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, mean=0, std=0.1)
                 nn.init.constant_(m.bias, val=0)
 
     def forward(self, t: torch.Tensor, y: torch.Tensor):
-        """ The initial value y is passed through a neural network.
+        """ The forward pass of the neural network in the context of neural ODE.
 
-        :param t: Tensor with time to compute the trajectory
-        :param y: Tensor with the initial value, shape: (nbatch, obs_dim)
-        :return: Tensor with the output of the neural network, shape: (nbatch, obs_dim)
+        Parameters
+        ----------
+        t: torch.Tensor
+            Tensor with time steps to compute the trajectory.
+
+        y: torch.Tensor
+            Tensor with the initial value (batch_size, 1, obs_dim).
+
+        Returns
+        -------
+        torch.Tensor
+        Tensor with the output of the neural network (batch_size, obs_dim).
         """
         return self.net(y)
 
