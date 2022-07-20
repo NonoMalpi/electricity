@@ -1,7 +1,135 @@
+from abc import ABC, abstractmethod
+
 import torch
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+class LossFunction(ABC):
+    """ Abstract class to define a loss function.
+
+    Methods
+    -------
+    compute_loss
+    """
+
+    @abstractmethod
+    def compute_loss(self, pred_y: torch.Tensor, true_y: torch.Tensor) -> torch.Tensor:
+        """ Compute the loss function between the predicted and true tensors.
+
+        Parameters
+        ----------
+        pred_y: torch.Tensor
+            The predicted response tensor.
+
+        true_y: torch.Tensor
+            The true response tensor.
+        """
+        raise NotImplementedError
+
+
+class MeanAbsoluteError(LossFunction):
+    """ Class to compute the mean absolute error implemented by pytorch.
+
+    Attributes
+    ----------
+    loss: torch.nn.modules.loss.L1Loss
+        The L1 distance or mean absolute error.
+
+    Methods
+    -------
+    compute_loss
+    """
+
+    def __init__(self):
+        self.loss = torch.nn.L1Loss()
+
+    def compute_loss(self, pred_y: torch.Tensor, true_y: torch.Tensor) -> torch.Tensor:
+        """ Compute the L1 distance or mean absolute error between the predicted and true tensors.
+
+        Parameters
+        ----------
+        pred_y: torch.Tensor
+            The predicted response tensor.
+
+        true_y: torch.Tensor
+            The true response tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The L1 distance or mean absolute error between the predicted and true tensors.
+        """
+        return self.loss(pred_y, true_y)
+
+
+class ExpDecayMeanAbsoluteError(LossFunction):
+    """ Class to compute the mean absolute error with exponential decay.
+
+    Parameters
+    ----------
+    base: int
+        The base of the exponential operation to apply to the mean absolute error.
+
+    Attributes
+    ----------
+    base: int
+        The base of the exponential operation to apply to the mean absolute error.
+
+    Methods
+    -------
+    compute_loss
+    """
+
+    def __init__(self, base: int):
+        self.base = base
+
+    # TODO: Refactor exponent to ensure that first time step always have weight fixed to x.
+    def _compute_exponential_decay(self, pred_y: torch.Tensor) -> torch.Tensor:
+        """ Generate an exponential decay tensor of the same shape that input tensor.
+
+        The input tensor must have a time coordinate as first dimension.
+        The exponential weight decays in reserve time order, i.e., the last time step has weight 1 and
+        the weight reduces in reverse time order.
+
+        Parameters
+        ----------
+        pred_y: torch.Tensor
+            Input tensor with shape (time, ... ).
+
+        Returns
+        -------
+        exp_decay_tensor: torch.Tensor
+            Exponential decay tensor with shape (time, ... ).
+        """
+        n = pred_y.shape[0]
+        exp_decay = [self.base ** i for i in np.arange(n)]
+        exp_decay = torch.FloatTensor(exp_decay[::-1])
+        # repeat exp_dec to match pred_y shape
+        exp_decay_tensor = exp_decay.unsqueeze(1).repeat(1, pred_y[0].numel()).reshape(pred_y.shape)
+        return exp_decay_tensor
+
+    def compute_loss(self, pred_y: torch.Tensor, true_y: torch.Tensor) -> torch.Tensor:
+        """ Compute the exponential decay mean absolute error between the predicted and true tensors.
+
+        Parameters
+        ----------
+        pred_y: torch.Tensor
+            The predicted response tensor.
+
+        true_y: torch.Tensor
+            The true response tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The exponential decay mean absolute error between the predicted and true tensors.
+        """
+        exp_decay = self._compute_exponential_decay(pred_y=pred_y)
+        loss = torch.mean(exp_decay * torch.abs(pred_y - true_y))
+        return loss
+
 
 class RunningAverageMeter:
     """Computes and stores the average and current value"""
@@ -22,6 +150,7 @@ class RunningAverageMeter:
         self.val = val
 
 
+# TODO: Deprecate
 def get_random_batch(y_true, t,  batch_size, trajectory_time):
     s = torch.from_numpy(np.random.choice(
         np.arange(t.shape[0] - trajectory_time, dtype=np.int64), batch_size, replace=False
@@ -40,6 +169,7 @@ def get_random_batch(y_true, t,  batch_size, trajectory_time):
     return samp_trajs, samp_ts, s
 
 
+# TODO: Deprecate
 def get_norm_batch(y_true, start, end):
 
     trajectory = y_true.iloc[start: end]
@@ -54,6 +184,7 @@ def get_norm_batch(y_true, start, end):
     return samp_traj, samp_ts, mean, std
 
 
+# TODO: Deprecate
 def get_norm_batch_with_noise(y_true, start, end, noise_std):
 
     samp_traj, samp_ts, mean, std = get_norm_batch(y_true=y_true, start=start, end=end)

@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 from torchdiffeq import odeint
 
 from external_drift.utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
-from ml.neural_network import NeuralNetFunc, RunningAverageMeter
+from ml.neural_network import LossFunction, NeuralNetFunc, RunningAverageMeter
 from plot.external_drift import plot_training_evaluation
 
 
@@ -29,10 +29,16 @@ class NeuralODEBase(ABC):
     params: ScenarioParams
         Class containing simulation parameters and auxiliary information.
 
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
+
     Attributes
     ----------
     params: ScenarioParams
         Class containing simulation parameters and auxiliary information.
+
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
 
     Methods
     -------
@@ -43,8 +49,9 @@ class NeuralODEBase(ABC):
     solve_initial_value
     """
 
-    def __init__(self, params: ScenarioParams):
+    def __init__(self, params: ScenarioParams, loss_func: LossFunction):
         self.params = params
+        self.loss_func = loss_func
 
     @abstractmethod
     def initialize_loss_meter(self) -> NoReturn:
@@ -87,8 +94,8 @@ class NeuralODEBase(ABC):
         """ Return the value of the loss meter. """
         pass
 
-    @staticmethod
-    def train_neural_ode_step(neural_ode: NeuralNetFunc,
+    def train_neural_ode_step(self,
+                              neural_ode: NeuralNetFunc,
                               optimizer: torch.optim.Optimizer,
                               loss_meter: RunningAverageMeter,
                               batch_y0: torch.Tensor,
@@ -141,7 +148,7 @@ class NeuralODEBase(ABC):
 
         pred_y = odeint(neural_ode, batch_y0, batch_t)
 
-        loss = torch.mean(torch.abs(pred_y - batch_y))
+        loss = self.loss_func.compute_loss(pred_y=pred_y, true_y=batch_y)
         loss.backward()
         optimizer.step()
 
@@ -163,6 +170,9 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
     optimizer: torch.optim.Optimizer
         The optimizer callable to train the neural ODE.
 
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
+
     loss_momentum: float
         Momentum of the moving average loss value.
 
@@ -179,6 +189,9 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
 
     optimizer: torch.optim.Optimizer
         The optimizer instance to train the neural ODE.
+
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
 
     loss_momentum: float
         Momentum of the moving average loss value.
@@ -199,9 +212,10 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
                  params: ScenarioParams,
                  neural_ode_template: NeuralNetFunc,
                  optimizer: torch.optim.Optimizer,
+                 loss_func: LossFunction,
                  loss_momentum: float):
 
-        super(SingleMultivariateNeuralODE, self).__init__(params=params)
+        super(SingleMultivariateNeuralODE, self).__init__(params=params, loss_func=loss_func)
 
         self.device = torch.device("cpu")
         self.neural_ode = neural_ode_template.to(self.device)
@@ -274,6 +288,9 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
     optimizer: torch.optim.Optimizer
         The optimizer callable to train the neural ODE.
 
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
+
     loss_momentum: float
         Momentum of the moving average loss value.
 
@@ -290,6 +307,9 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
 
     optimizer: Dict[int, torch.optim.Optimizer]
        Dictionary containing integer identifier of neural ODE as key and optimizer to train the neural ODE as value.
+
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
 
     loss_momentum: float
         Momentum of the moving average loss value.
@@ -310,9 +330,10 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
                  params: ScenarioParams,
                  neural_ode_template: NeuralNetFunc,
                  optimizer: torch.optim,
+                 loss_func: LossFunction,
                  loss_momentum: float):
 
-        super(MultipleUnivariateNeuralODE, self).__init__(params=params)
+        super(MultipleUnivariateNeuralODE, self).__init__(params=params, loss_func=loss_func)
 
         self.device = torch.device("cpu")
         self.neural_ode = {}
@@ -397,6 +418,7 @@ def train_neural_ode_external_drift(params: ScenarioParams,
                                     signal_dimension: SignalDimension,
                                     hidden_layer_neurons: List[int],
                                     activation_functions: List[torch.nn.modules.activation.Module],
+                                    loss_func: LossFunction,
                                     train_df: pd.DataFrame) -> Tuple[Dict[int, torch.Tensor], NeuralODEBase]:
     """ Train a simple neural ODE for the net architecture provided and evaluate test time steps.
 
@@ -423,6 +445,9 @@ def train_neural_ode_external_drift(params: ScenarioParams,
 
     activation_functions: List[nn.modules.activation.Module]
         List containing the activation function to apply after each layer.
+
+    loss_func: LossFunction
+        The loss function class to train the neural ODE.
 
     train_df: pd.DataFrame
         The training set with MultiIndex(hour, time step) and number of simulation as columns.
@@ -451,6 +476,7 @@ def train_neural_ode_external_drift(params: ScenarioParams,
         node = SingleMultivariateNeuralODE(params=params,
                                            neural_ode_template=func,
                                            optimizer=torch.optim.RMSprop,
+                                           loss_func=loss_func,
                                            loss_momentum=0.97)
     elif signal_dimension == SignalDimension.Univariate:
         func = NeuralNetFunc(obs_dim=1,
@@ -459,6 +485,7 @@ def train_neural_ode_external_drift(params: ScenarioParams,
         node = MultipleUnivariateNeuralODE(params=params,
                                            neural_ode_template=func,
                                            optimizer=torch.optim.RMSprop,
+                                           loss_func=loss_func,
                                            loss_momentum=0.97)
 
     start = time.time()
