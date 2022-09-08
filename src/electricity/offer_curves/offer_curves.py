@@ -3,7 +3,7 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 
-from data_collector import OfferCurvesParams
+from electricity.data_collector import OfferCurvesParams
 
 df = pd.DataFrame()
 

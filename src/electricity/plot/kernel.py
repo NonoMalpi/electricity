@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 
 
-from ml import GaussianKernel
-from plot import ImperialColors
+from electricity.ml import GaussianKernel
+from electricity.plot import ImperialColors
 
 
 def plot_samples_kernel_mean_expected(ax: plt.Axes,

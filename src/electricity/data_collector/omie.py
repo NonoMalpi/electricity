@@ -15,7 +15,7 @@ from google.cloud import bigquery
 from joblib import Parallel, delayed
 from retry import retry
 
-from data_collector.parameters import (
+from electricity.data_collector.parameters import (
     GCP, OmieParameter, MarginalPriceParams, OfferCurvesParams, OfferCurvesUnitsParams, Period
 )
 

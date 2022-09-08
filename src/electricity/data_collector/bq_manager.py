@@ -6,8 +6,8 @@ import pandas as pd
 from google.cloud import bigquery
 from google.cloud.exceptions import NotFound
 
-from data_collector.parameters import GCP, OfferCurvesParams, OfferCurvesUnitsParams
-from data_collector.queries import HOURLY_TABLE
+from electricity.data_collector.parameters import GCP, OfferCurvesParams, OfferCurvesUnitsParams
+from electricity.data_collector.queries import HOURLY_TABLE
 
 logger = logging.getLogger()
 logging.basicConfig(format="%(asctime)s|%(name)s|%(levelname)s|%(message)s", level=logging.INFO)

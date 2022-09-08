@@ -8,8 +8,8 @@ import seaborn as sns
 
 from scipy.linalg import sqrtm
 
-from potenciala.metric import Metric
-from potenciala.transformers import TransformerFactory
+from electricity.potenciala.metric import Metric
+from electricity.potenciala.transformers import TransformerFactory
 
 
 class BucketMethod(Enum):

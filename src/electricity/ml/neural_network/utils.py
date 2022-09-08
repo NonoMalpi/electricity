@@ -64,6 +64,41 @@ class MeanAbsoluteError(LossFunction):
         return self.loss(pred_y, true_y)
 
 
+class MeanSquaredError(LossFunction):
+    """ Class to compute the mean squared error implemented by pytorch.
+
+    Attributes
+    ----------
+    loss: torch.nn.modules.loss.MSELoss
+        The L2 distance or mean squared error.
+
+    Methods
+    -------
+    compute_loss
+    """
+
+    def __init__(self):
+        self.loss = torch.nn.MSELoss()
+
+    def compute_loss(self, pred_y: torch.Tensor, true_y: torch.Tensor) -> torch.Tensor:
+        """ Compute the L@ distance or mean squared error between the predicted and true tensors.
+
+        Parameters
+        ----------
+        pred_y: torch.Tensor
+            The predicted response tensor.
+
+        true_y: torch.Tensor
+            The true response tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The L2 distance or mean squared error between the predicted and true tensors.
+        """
+        return self.loss(pred_y, true_y)
+
+
 class ExpDecayMeanAbsoluteError(LossFunction):
     """ Class to compute the mean absolute error with exponential decay.
 

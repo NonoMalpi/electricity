@@ -12,9 +12,9 @@ import pandas as pd
 from joblib import Parallel, delayed
 from torchdiffeq import odeint
 
-from external_drift.utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
-from ml.neural_network import LossFunction, NeuralNetFunc, RunningAverageMeter
-from plot.external_drift import plot_training_evaluation
+from electricity.external_drift.utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
+from electricity.ml.neural_network import LossFunction, NeuralNetFunc, RunningAverageMeter
+from electricity.plot import plot_training_evaluation
 
 
 class NeuralODEBase(ABC):
@@ -59,7 +59,7 @@ class NeuralODEBase(ABC):
         pass
 
     @abstractmethod
-    def train(self, batch_y0: torch.Tensor, batch_t: torch.Tensor, batch_y: torch.Tensor) -> NoReturn:
+    def train(self, batch_y0: torch.Tensor, batch_t: torch.Tensor, batch_y: torch.Tensor):#, scale: torch.Tensor) -> NoReturn:
         """ Train the neural ODE for a given batch.
 
         Parameters
@@ -147,6 +147,7 @@ class NeuralODEBase(ABC):
         optimizer.zero_grad()
 
         pred_y = odeint(neural_ode, batch_y0, batch_t)
+        pred_y += torch.normal(0, std=0.05, size=pred_y.shape)
 
         loss = self.loss_func.compute_loss(pred_y=pred_y, true_y=batch_y)
         loss.backward()
@@ -227,7 +228,7 @@ class SingleMultivariateNeuralODE(NeuralODEBase):
         """ Implement one single loss_meter attribute for training process. """
         self.loss_meter = RunningAverageMeter(self.loss_momentum)
 
-    def train(self, batch_y0: torch.Tensor, batch_t: torch.Tensor, batch_y: torch.Tensor) -> NoReturn:
+    def train(self, batch_y0: torch.Tensor, batch_t: torch.Tensor, batch_y: torch.Tensor):#, scale: torch.Tensor) -> NoReturn:
         """ Performs a training step for the neural ODE for a given batch.
 
         Parameters
@@ -364,7 +365,7 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
             Tensor containing the whole trajectory (time_period + 1, batch_size, 1, obs_dim).
         """
 
-        train_step_list = Parallel(n_jobs=-1, verbose=0)(
+        train_step_list = Parallel(n_jobs=4, verbose=0)(
             delayed(self.train_neural_ode_step)(
                 neural_ode=self.neural_ode[k],
                 optimizer=self.optimizer[k],
