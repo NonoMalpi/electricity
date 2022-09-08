@@ -2,7 +2,10 @@
 name = "electricity"
 version = "0.1.0"
 description = ""
-authors = ["Antonio Ma"]
+authors = ["Antonio Malpica <antoniomalpicamorales@gmail.com>"]
+packages = [
+    { include = "electricity", from = "src" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
