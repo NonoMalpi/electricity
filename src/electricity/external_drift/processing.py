@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from electricity.external_drift.utils import ScenarioParams
+from .utils import ScenarioParams
 
 
 def generate_training_set(sim_df: pd.DataFrame, actual_series: pd.Series, params: ScenarioParams) -> pd.DataFrame:

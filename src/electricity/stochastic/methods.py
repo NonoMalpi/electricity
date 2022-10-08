@@ -7,7 +7,7 @@ import pandas as pd
 
 from joblib import Parallel, delayed
 
-from electricity.stochastic.coefficients import Coefficient
+from .coefficients import Coefficient
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 

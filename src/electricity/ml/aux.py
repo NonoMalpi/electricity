@@ -4,7 +4,7 @@ import re
 
 from typing import Dict, List, Union
 
-from electricity.ml import GaussianKernel
+from .kenel_density import GaussianKernel
 
 
 def prepare_kernel_dict(dim_num: int) -> Dict:

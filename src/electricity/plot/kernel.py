@@ -6,7 +6,7 @@ import pandas as pd
 
 
 from electricity.ml import GaussianKernel
-from electricity.plot import ImperialColors
+from .colors import ImperialColors
 
 
 def plot_samples_kernel_mean_expected(ax: plt.Axes,
@@ -38,7 +38,7 @@ def plot_samples_kernel_mean_expected(ax: plt.Axes,
     ax.plot(gk.samples[0], gk.samples[1], 'k.', markersize=1, alpha=0.2)
     historical_mean.plot(ax=ax, lw=lw, color=ImperialColors.red.value)
     ax.plot(gk.expected_value_function[0, :], gk.expected_value_function[1, :], lw=lw,
-            color=ImperialColors.blue.value)
+            color=ImperialColors.dark_grey.value)
     cs = ax.contourf(gk.grid[0], gk.grid[1], gk.p,
                      levels=100, cmap=plt.cm.gist_earth_r, alpha=0.5, antialiased=True)
     if ymax_lim:

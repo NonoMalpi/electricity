@@ -12,10 +12,11 @@ import pandas as pd
 from joblib import Parallel, delayed
 from torchdiffeq import odeint
 
-from electricity.external_drift.utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
-from electricity.ml.neural_network import LossFunction, NeuralNetFunc, RunningAverageMeter
-from electricity.plot import plot_training_evaluation
 
+from electricity.ml.neural_network import LossFunction, NeuralNetFunc, RunningAverageMeter
+from electricity.plot.external_drift import plot_training_evaluation
+
+from .utils import ScenarioParams, SignalDimension, get_multivariate_batch, get_mean_tensor_from_training_set
 
 class NeuralODEBase(ABC):
     """ Abstract class to handle neural ODE training and validation.
@@ -147,7 +148,7 @@ class NeuralODEBase(ABC):
         optimizer.zero_grad()
 
         pred_y = odeint(neural_ode, batch_y0, batch_t)
-        pred_y += torch.normal(0, std=0.05, size=pred_y.shape)
+        #pred_y += torch.normal(0, std=0.05, size=pred_y.shape)
 
         loss = self.loss_func.compute_loss(pred_y=pred_y, true_y=batch_y)
         loss.backward()
@@ -365,7 +366,7 @@ class MultipleUnivariateNeuralODE(NeuralODEBase):
             Tensor containing the whole trajectory (time_period + 1, batch_size, 1, obs_dim).
         """
 
-        train_step_list = Parallel(n_jobs=4, verbose=0)(
+        train_step_list = Parallel(n_jobs=5, verbose=0)(
             delayed(self.train_neural_ode_step)(
                 neural_ode=self.neural_ode[k],
                 optimizer=self.optimizer[k],

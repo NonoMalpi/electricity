@@ -3,7 +3,7 @@ from typing import Dict, NoReturn
 
 import matplotlib.pyplot as plt
 
-from electricity.plot.colors import ImperialColors
+from .colors import ImperialColors
 
 
 def fill_ax_simulation(ax: plt.Axes, sim_dict: Dict) -> NoReturn:

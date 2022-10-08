@@ -3,7 +3,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-from electricity.ml import GaussianKernel
+from .kenel_density import GaussianKernel
 
 
 class KramersMoyal:

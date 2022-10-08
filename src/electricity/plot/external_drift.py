@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from electricity.external_drift import ScenarioParams
-from electricity.plot import ImperialColors
+from electricity.external_drift.utils import ScenarioParams
+from .colors import ImperialColors
 
 
 def plot_training_evaluation(pred_tensor: torch.Tensor,
