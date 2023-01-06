@@ -37,9 +37,10 @@ def fill_ax_simulation(ax: plt.Axes, sim_dict: Dict) -> NoReturn:
         ax.fill_between(intervals_df.columns, intervals_df.iloc[1, :], intervals_df.iloc[-2, :],
                         facecolor=ImperialColors.light_blue.value, alpha=1)
 
-    ax.set_xlabel("time [hours]", fontsize=14)
-    ax.set_ylabel("spot price [€/MWh]", fontsize=14)
-    ax.tick_params(axis='both', labelsize=14)
+    ax.set_xlabel("time [hours]", fontsize=35)
+    ax.set_ylabel("price [€/MWh]", fontsize=35)
+    ax.tick_params(axis='both', labelsize=35)
+    ax.set_xlim(0, sim_df.shape[0])
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
 

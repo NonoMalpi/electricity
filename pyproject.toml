@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "electricity"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Antonio Malpica <antoniomalpicamorales@gmail.com>"]
 packages = [
