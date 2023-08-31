@@ -23,11 +23,12 @@ def fill_ax_simulation(ax: plt.Axes, sim_dict: Dict) -> NoReturn:
     num_sim_show = sim_dict.get("num_sim_show", 0)
     quantile_regions = sim_dict.get("quantile_regions", True)
     ymax = sim_dict.get("ymax", None)
+    ylabel = sim_dict.get("ylabel", "price [€/MWh]")
 
     if num_sim_show > 0:
         sim_df.iloc[24:, : num_sim_show].plot(alpha=0.05, ax=ax, legend=False)
 
-    sim_df.mean(axis=1).plot(lw=2, color=ImperialColors.blue.value, ax=ax)
+    sim_df.mean(axis=1).plot(lw=2, color=ImperialColors.dark_grey.value, ax=ax, ls="--")
     actual_df.reset_index()["spain"].plot(lw=2, color=ImperialColors.dark_grey.value, ax=ax)
     intervals_df = sim_df.iloc[24:, :].quantile(q=[0.1, 0.25, 0.75, 0.9], axis=1)
 
@@ -38,11 +39,14 @@ def fill_ax_simulation(ax: plt.Axes, sim_dict: Dict) -> NoReturn:
                         facecolor=ImperialColors.light_blue.value, alpha=1)
 
     ax.set_xlabel("time [hours]", fontsize=35)
-    ax.set_ylabel("price [€/MWh]", fontsize=35)
-    ax.tick_params(axis='both', labelsize=35)
-    ax.set_xlim(0, sim_df.shape[0])
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+    ax.set_ylabel(ylabel, fontsize=35)
+    ax.tick_params(axis='both', labelsize=35, direction="in",  width=1, length=10)
+    ax.yaxis.set_ticks_position('both')
+    ax.xaxis.set_ticks_position('both')
+    ax.set_xlim(0, sim_df.shape[0]-1)
+    #ax.spines['right'].set_visible(False)
+    #ax.spines['top'].set_visible(False)
+
 
     if ymax:
         ax.set_ylim(0, ymax)
@@ -60,13 +64,18 @@ def plot_simulation(sim_dict: Dict, filename: str = None) -> NoReturn:
         Optional arguments:
             - num_sim_show [int]: number of random trajectories to plot with very light alpha in background, default = 0.
             - quantile_regions [bool]: Whether show percentile shaded areas, default = True.
-            - ymax [floar]: maximum y tick to show, default = None.
+            - ymax [float]: maximum y tick to show, default = None.
+            - ylabel [str]: title of y axis, default = price [€/MWh].
+            - label_fig [str]: label of the figure for subplot identification, default = None.
 
     filename: str
         Save figure in this filename, default = None meaning the figure is not saved.
     """
     fig, ax = plt.subplots(1, 1, figsize=(15, 10))
     fill_ax_simulation(ax=ax, sim_dict=sim_dict)
+    label_fig = sim_dict.get("label_fig", None)
+    if label_fig:
+        fig.text(0.04, 0.85, label_fig, ha="center", va="center", fontdict={"size": 35})
 
     if filename:
         fig.savefig(filename, bbox_inches='tight')
